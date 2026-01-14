@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Copy, Check, Flame, FileText, Hash, Eye, Lightbulb, Sparkles } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
 
 interface AIMessageProps {
   content: any; // Can be structured viral content or plain text
@@ -215,6 +214,57 @@ ${content.postingTip}
   // Render conversational message
   const textContent = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
 
+  // Simple markdown-like formatting
+  const formatText = (text: string) => {
+    const lines = text.split('\n');
+    return lines.map((line, i) => {
+      // Headers
+      if (line.startsWith('### ')) {
+        return <h3 key={i} className="text-sm font-bold mb-2 mt-3">{line.slice(4)}</h3>;
+      }
+      if (line.startsWith('## ')) {
+        return <h2 key={i} className="text-base font-bold mb-2 mt-3">{line.slice(3)}</h2>;
+      }
+      if (line.startsWith('# ')) {
+        return <h1 key={i} className="text-lg font-bold mb-2 mt-3">{line.slice(2)}</h1>;
+      }
+      
+      // Lists
+      if (line.match(/^[-*]\s/)) {
+        return (
+          <li key={i} className="text-sm ml-4 mb-1">
+            {line.slice(2)}
+          </li>
+        );
+      }
+      if (line.match(/^\d+\.\s/)) {
+        return (
+          <li key={i} className="text-sm ml-4 mb-1">
+            {line.replace(/^\d+\.\s/, '')}
+          </li>
+        );
+      }
+      
+      // Bold text **text**
+      const parts = line.split(/\*\*(.*?)\*\*/g);
+      const formatted = parts.map((part, j) => 
+        j % 2 === 1 ? <strong key={j} className="font-semibold">{part}</strong> : part
+      );
+      
+      // Empty line
+      if (!line.trim()) {
+        return <br key={i} />;
+      }
+      
+      // Regular paragraph
+      return (
+        <p key={i} className="text-sm leading-relaxed mb-3">
+          {formatted}
+        </p>
+      );
+    });
+  };
+
   return (
     <div className="mb-6 animate-fade-in">
       <div className="max-w-3xl">
@@ -223,23 +273,8 @@ ${content.postingTip}
             <Sparkles className="h-4 w-4 text-primary" />
           </div>
           <div className="flex-1 space-y-3">
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              <ReactMarkdown
-                components={{
-                  p: ({ children }) => <p className="text-sm leading-relaxed mb-3 last:mb-0">{children}</p>,
-                  strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-                  ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-3">{children}</ul>,
-                  ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 mb-3">{children}</ol>,
-                  li: ({ children }) => <li className="text-sm">{children}</li>,
-                  code: ({ children }) => <code className="px-1.5 py-0.5 rounded bg-muted text-xs font-mono">{children}</code>,
-                  pre: ({ children }) => <pre className="p-3 rounded-lg bg-muted overflow-x-auto mb-3">{children}</pre>,
-                  h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
-                  h2: ({ children }) => <h2 className="text-base font-bold mb-2">{children}</h2>,
-                  h3: ({ children }) => <h3 className="text-sm font-bold mb-2">{children}</h3>,
-                }}
-              >
-                {textContent}
-              </ReactMarkdown>
+            <div className="space-y-1">
+              {formatText(textContent)}
             </div>
             <Button
               onClick={copyAll}
