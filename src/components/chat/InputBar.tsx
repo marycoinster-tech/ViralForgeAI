@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { NICHES, VIBES, GOALS, PLATFORMS } from '@/constants/options';
@@ -25,7 +25,11 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('tiktok');
   const [showOptions, setShowOptions] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecognition | null>(null);
+  const [audioLevel, setAudioLevel] = useState(0);
+  const mediaRecorderRef = useRef<any | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
   const handleSubmit = () => {
     if (!customTopic.trim() && !showOptions) return;
@@ -48,53 +52,105 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
     }
   };
 
+  // Cleanup audio visualization on unmount
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, []);
+
+  // Audio visualization
+  const startAudioVisualization = async (stream: MediaStream) => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaStreamSource(stream);
+      
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      
+      audioContextRef.current = audioContext;
+      analyserRef.current = analyser;
+      
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      
+      const updateLevel = () => {
+        if (!analyserRef.current) return;
+        
+        analyserRef.current.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+        setAudioLevel(average / 255); // Normalize to 0-1
+        
+        animationFrameRef.current = requestAnimationFrame(updateLevel);
+      };
+      
+      updateLevel();
+    } catch (error) {
+      console.error('Audio visualization error:', error);
+    }
+  };
+
   // Voice recording using Web Speech API
-  const startVoiceRecording = () => {
+  const startVoiceRecording = async () => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       alert('Voice input is not supported in your browser. Please use Chrome or Edge.');
       return;
     }
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
+    try {
+      // Start audio visualization
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      await startAudioVisualization(stream);
 
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
 
-    recognition.onstart = () => {
-      setIsRecording(true);
-    };
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
 
-    recognition.onresult = (event: any) => {
-      let interimTranscript = '';
-      let finalTranscript = '';
+      recognition.onstart = () => {
+        setIsRecording(true);
+      };
 
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript + ' ';
-        } else {
-          interimTranscript += transcript;
+      recognition.onresult = (event: any) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript + ' ';
+          } else {
+            interimTranscript += transcript;
+          }
         }
-      }
 
-      if (finalTranscript) {
-        setCustomTopic((prev) => prev + finalTranscript);
-      }
-    };
+        if (finalTranscript) {
+          setCustomTopic((prev) => prev + finalTranscript);
+        }
+      };
 
-    recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
-      setIsRecording(false);
-    };
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        stopVoiceRecording();
+      };
 
-    recognition.onend = () => {
-      setIsRecording(false);
-    };
+      recognition.onend = () => {
+        stopVoiceRecording();
+      };
 
-    recognition.start();
-    mediaRecorderRef.current = recognition;
+      recognition.start();
+      mediaRecorderRef.current = recognition;
+    } catch (error) {
+      console.error('Failed to start voice recording:', error);
+      alert('Could not access microphone. Please check permissions.');
+    }
   };
 
   const stopVoiceRecording = () => {
@@ -102,7 +158,19 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current = null;
     }
+    
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    
     setIsRecording(false);
+    setAudioLevel(0);
   };
 
   const toggleVoiceRecording = () => {
@@ -234,13 +302,31 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
           </Button>
         </div>
 
-        <p className="text-xs text-center text-muted-foreground">
-          {isRecording ? (
-            <span className="text-destructive font-semibold">🔴 Recording... Click mic to stop</span>
-          ) : (
-            'Press Enter to generate • Shift + Enter for new line • Click mic for voice input'
-          )}
-        </p>
+        {/* Recording Indicator with Waveform */}
+        {isRecording && (
+          <div className="flex items-center justify-center gap-3 py-2 animate-fade-in">
+            <span className="text-xs font-semibold text-destructive">Recording</span>
+            <div className="flex items-center gap-1 h-8">
+              {[...Array(20)].map((_, i) => {
+                const height = Math.max(4, audioLevel * 32 * (1 + Math.sin(i * 0.5 + Date.now() / 200)));
+                return (
+                  <div
+                    key={i}
+                    className="w-1 bg-primary rounded-full transition-all duration-75"
+                    style={{ height: `${height}px` }}
+                  />
+                );
+              })}
+            </div>
+            <span className="text-xs text-muted-foreground">Click mic to stop</span>
+          </div>
+        )}
+
+        {!isRecording && (
+          <p className="text-xs text-center text-muted-foreground">
+            Press Enter to generate • Shift + Enter for new line • Click mic for voice input
+          </p>
+        )}
       </div>
     </div>
   );

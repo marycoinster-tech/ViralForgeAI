@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { UserMessage } from '@/components/chat/UserMessage';
@@ -9,7 +9,8 @@ import { GeneratorInput, GeneratedContent } from '@/types/content';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, RotateCcw, X, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 
 interface Message {
@@ -29,6 +30,9 @@ export function Chat() {
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [lastInput, setLastInput] = useState<GeneratorInput | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const generationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load conversation messages when conversationId changes
   useEffect(() => {
@@ -66,8 +70,39 @@ export function Chat() {
     }
   };
 
-  const handleGenerate = async (input: GeneratorInput) => {
+  const handleRetry = () => {
+    if (lastInput) {
+      handleGenerate(lastInput, true);
+    }
+  };
+
+  const handleStopGeneration = () => {
+    if (generationTimeoutRef.current) {
+      clearTimeout(generationTimeoutRef.current);
+    }
+    setIsGenerating(false);
+    setGenerationError('Generation cancelled');
+  };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (generationTimeoutRef.current) {
+        clearTimeout(generationTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleGenerate = async (input: GeneratorInput, isRetry = false) => {
     setIsGenerating(true);
+    setGenerationError(null);
+    setLastInput(input);
+
+    // Set timeout to detect hung generations (60 seconds)
+    generationTimeoutRef.current = setTimeout(() => {
+      setGenerationError('Generation is taking too long. Please try again.');
+      setIsGenerating(false);
+    }, 60000);
 
     try {
 
@@ -121,10 +156,21 @@ export function Chat() {
         throw new Error(errorMessage);
       }
 
+      // Clear timeout on success
+      if (generationTimeoutRef.current) {
+        clearTimeout(generationTimeoutRef.current);
+      }
+
       // Reload messages to get the new user message and AI response
       await loadConversation(convId!);
 
     } catch (error: any) {
+      // Clear timeout on error
+      if (generationTimeoutRef.current) {
+        clearTimeout(generationTimeoutRef.current);
+      }
+      
+      setGenerationError(error.message);
       console.error('Generation error:', error);
       toast({
         title: 'Generation failed',
@@ -135,6 +181,29 @@ export function Chat() {
       setIsGenerating(false);
     }
   };
+
+  const handleRetry = () => {
+    if (lastInput) {
+      handleGenerate(lastInput, true);
+    }
+  };
+
+  const handleStopGeneration = () => {
+    if (generationTimeoutRef.current) {
+      clearTimeout(generationTimeoutRef.current);
+    }
+    setIsGenerating(false);
+    setGenerationError('Generation cancelled');
+  };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (generationTimeoutRef.current) {
+        clearTimeout(generationTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const quickPrompts = [
     {
@@ -234,7 +303,49 @@ export function Chat() {
                   return <AIMessage key={message.id} content={message.content} />;
                 })}
 
-                {isGenerating && <LoadingIndicator />}
+                {isGenerating && (
+                  <div className="space-y-4">
+                    <LoadingIndicator />
+                    <div className="flex justify-center">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleStopGeneration}
+                        className="border-destructive/40 hover:bg-destructive/10"
+                      >
+                        <X className="mr-2 h-4 w-4" />
+                        Stop generating
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {generationError && !isGenerating && (
+                  <div className="mb-6 animate-fade-in">
+                    <div className="max-w-3xl glass-card p-6 border-destructive/20">
+                      <div className="space-y-4">
+                        <div className="flex items-start gap-3">
+                          <div className="mt-1 p-2 rounded-lg bg-destructive/10">
+                            <AlertCircle className="h-4 w-4 text-destructive" />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-destructive mb-1">Generation Failed</h3>
+                            <p className="text-sm text-muted-foreground">{generationError}</p>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={handleRetry}
+                          variant="outline"
+                          size="sm"
+                          className="w-full border-primary/40 hover:bg-primary/10"
+                        >
+                          <RotateCcw className="mr-2 h-4 w-4" />
+                          Retry Generation
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
