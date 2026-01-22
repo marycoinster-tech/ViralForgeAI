@@ -70,29 +70,6 @@ export function Chat() {
     }
   };
 
-  const handleRetry = () => {
-    if (lastInput) {
-      handleGenerate(lastInput, true);
-    }
-  };
-
-  const handleStopGeneration = () => {
-    if (generationTimeoutRef.current) {
-      clearTimeout(generationTimeoutRef.current);
-    }
-    setIsGenerating(false);
-    setGenerationError('Generation cancelled');
-  };
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (generationTimeoutRef.current) {
-        clearTimeout(generationTimeoutRef.current);
-      }
-    };
-  }, []);
-
   const handleGenerate = async (input: GeneratorInput, isRetry = false) => {
     setIsGenerating(true);
     setGenerationError(null);
