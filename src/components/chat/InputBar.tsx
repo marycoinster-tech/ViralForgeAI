@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { NICHES, VIBES, GOALS, PLATFORMS } from '@/constants/options';
 import { GeneratorInput, Niche, Vibe, Goal, Platform } from '@/types/content';
-import { Sparkles, ChevronDown, Mic, Square } from 'lucide-react';
+import { Sparkles, ChevronDown, Mic, Square, Pause, Play } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -98,23 +98,22 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
         
         analyserRef.current.getByteFrequencyData(dataArray);
         
-        // Split frequency data into 20 bands for each bar
-        const bandSize = Math.floor(dataArray.length / 20);
-        const bars: number[] = [];
+        // Get overall volume/amplitude - this drives the ENTIRE wave
+        const overallLevel = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+        const normalizedLevel = overallLevel / 255; // 0-1
         
+        // Create bars that all move together based on overall volume
+        // Add slight variation per bar to keep it interesting
+        const bars: number[] = [];
         for (let i = 0; i < 20; i++) {
-          const start = i * bandSize;
-          const end = start + bandSize;
-          const band = dataArray.slice(start, end);
-          const average = band.reduce((a, b) => a + b, 0) / band.length;
-          bars.push(average / 255); // Normalize to 0-1
+          // Each bar gets the overall level + small random variation
+          const variation = Math.random() * 0.2; // 20% variation
+          const barLevel = normalizedLevel * (0.9 + variation);
+          bars.push(Math.min(1, barLevel));
         }
         
-        // Get overall audio level for reactive feedback
-        const overallLevel = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-        
-        // Update state with both overall level and individual bars
-        setAudioLevel(overallLevel / 255); // Normalize to 0-1
+        // Update state
+        setAudioLevel(normalizedLevel);
         setFrequencyBars(bars);
         
         animationFrameRef.current = requestAnimationFrame(updateLevel);
@@ -427,18 +426,18 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
               </div>
               <div className="flex items-center gap-0.5 h-10">
                 {frequencyBars.map((level, i) => {
-                  // Each bar shows actual frequency data
+                  // ALL bars move together based on volume
                   const baseHeight = 4;
                   const maxHeight = 40;
-                  // Use individual frequency bar data
+                  // Height driven by overall volume (with slight per-bar variation)
                   const height = isPaused 
                     ? baseHeight 
-                    : Math.max(baseHeight, Math.min(maxHeight, level * maxHeight * 1.5));
+                    : Math.max(baseHeight, Math.min(maxHeight, level * maxHeight * 2));
                   
                   return (
                     <div
                       key={i}
-                      className="w-1 bg-gradient-to-t from-primary via-accent to-primary rounded-full transition-all duration-75 ease-out"
+                      className="w-1 bg-gradient-to-t from-primary via-accent to-primary rounded-full transition-all duration-100 ease-out"
                       style={{ 
                         height: `${height}px`,
                         opacity: isPaused ? 0.3 : 1
@@ -452,35 +451,27 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
               </span>
             </div>
             
-            {/* Pause/Resume/Stop Controls */}
+            {/* Pause/Play Toggle & Stop Controls */}
             <div className="flex items-center justify-center gap-2">
-              {isPaused ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={resumeVoiceRecording}
-                  className="h-8 px-4 border-primary/40 hover:bg-primary/10"
-                >
-                  Resume
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={pauseVoiceRecording}
-                  className="h-8 px-4 border-yellow-500/40 hover:bg-yellow-500/10"
-                >
-                  Pause
-                </Button>
-              )}
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                onClick={isPaused ? resumeVoiceRecording : pauseVoiceRecording}
+                className={`h-9 w-9 ${isPaused ? 'border-primary/40 hover:bg-primary/10' : 'border-yellow-500/40 hover:bg-yellow-500/10'}`}
+              >
+                {isPaused ? (
+                  <Play className="h-4 w-4" />
+                ) : (
+                  <Pause className="h-4 w-4" />
+                )}
+              </Button>
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
                 onClick={stopVoiceRecording}
-                className="h-8 px-4 border-destructive/40 hover:bg-destructive/10"
+                className="h-9 px-4 border-destructive/40 hover:bg-destructive/10"
               >
                 Stop
               </Button>
