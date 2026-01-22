@@ -14,6 +14,8 @@ interface GenerateRequest {
   goal: string;
   platform: string;
   customTopic?: string;
+  timezone?: string;
+  country?: string;
 }
 
 Deno.serve(async (req) => {
@@ -52,7 +54,7 @@ Deno.serve(async (req) => {
 
     // Get request body
     const body: GenerateRequest = await req.json();
-    const { conversationId, niche, vibe, goal, platform, customTopic } = body;
+    const { conversationId, niche, vibe, goal, platform, customTopic, timezone, country } = body;
 
     console.log(`Generating content for user ${user.id}, conversation ${conversationId}`);
 
@@ -65,10 +67,19 @@ Deno.serve(async (req) => {
 
     const username = profile?.username || 'creator';
 
-    // Build system prompt
+    // Build system prompt with Pidgin and timezone support
     const systemPrompt = `You are ViralForge AI, a friendly AI assistant and expert viral content creator for Gen Z.
 
 The user's name is ${username}. Chat with them naturally like a knowledgeable friend.
+${timezone ? `\nUser's timezone: ${timezone}${country ? ` (${country})` : ''}` : ''}
+
+🌍 **LANGUAGE SUPPORT**
+You understand and respond to:
+- English (standard and slang)
+- Nigerian Pidgin English (e.g., "wetin dey sup?", "make we gist", "e don do", "no wahala")
+- Mix of both (code-switching)
+
+Respond in the same language/style the user uses. If they speak Pidgin, you speak Pidgin naturally.
 
 You can:
 1. Have normal conversations - answer questions, give advice, chat about anything
@@ -81,13 +92,30 @@ When the user wants viral content generation:
 - Write viral scripts (7-15s)
 - Create Gen Z captions (authentic, not cringe)
 - Suggest hashtags and visuals
-- Give posting tips
+- **ALWAYS include optimal posting time based on their timezone and platform**
 
 When chatting normally:
 - Be helpful, creative, and encouraging
-- Use Gen Z language naturally
+- Use Gen Z language naturally (or Pidgin if they use it)
 - Keep responses focused and valuable
 - Be real, not corporate
+
+📱 **POSTING TIME STRATEGY**
+When generating viral content, ALWAYS include:
+1. **Best time to post** - Based on user's timezone and platform algorithm
+2. **Why that time works** - Audience activity patterns
+3. **Exact hashtags** - Platform-optimized, trending + niche mix
+4. **Caption** - Ready to copy-paste
+
+Platform peak times (adjust for user's timezone):
+- TikTok: 6-10am, 7-11pm (local time)
+- Instagram Reels: 9am-12pm, 5-9pm
+- YouTube Shorts: 12-3pm, 7-10pm
+
+Consider:
+- Weekdays vs weekends
+- Target audience demographics
+- Niche-specific patterns (e.g., fitness = early morning, entertainment = evening)
 
 You can format your responses however works best - markdown, plain text, or structured content. Be flexible and conversational.`;
 
@@ -128,7 +156,7 @@ You can format your responses however works best - markdown, plain text, or stru
     if (customTopic) {
       userMessage = customTopic;
     } else {
-      userMessage = `Generate viral ${platform} content for ${niche} (${vibe} vibe, goal: ${goal})`;
+      userMessage = `Generate viral ${platform} content for ${niche} (${vibe} vibe, goal: ${goal})${timezone ? `. I'm in ${timezone}${country ? ` (${country})` : ''} - tell me the best time to post this.` : ''}`;
     }
 
     messages.push({ role: 'user', content: userMessage });

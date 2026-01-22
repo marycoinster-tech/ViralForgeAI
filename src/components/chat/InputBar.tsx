@@ -64,27 +64,43 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
     };
   }, []);
 
-  // Audio visualization
+  // Audio visualization - reactive to actual voice
   const startAudioVisualization = async (stream: MediaStream) => {
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const analyser = audioContext.createAnalyser();
       const source = audioContext.createMediaStreamSource(stream);
       
-      analyser.fftSize = 256;
+      analyser.fftSize = 512; // Higher resolution for better visualization
+      analyser.smoothingTimeConstant = 0.3; // Smoother transitions
       source.connect(analyser);
       
       audioContextRef.current = audioContext;
       analyserRef.current = analyser;
       
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const frequencyBars = new Uint8Array(20); // 20 bars for visualization
       
       const updateLevel = () => {
         if (!analyserRef.current) return;
         
         analyserRef.current.getByteFrequencyData(dataArray);
-        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-        setAudioLevel(average / 255); // Normalize to 0-1
+        
+        // Split frequency data into 20 bands for each bar
+        const bandSize = Math.floor(dataArray.length / 20);
+        for (let i = 0; i < 20; i++) {
+          const start = i * bandSize;
+          const end = start + bandSize;
+          const band = dataArray.slice(start, end);
+          const average = band.reduce((a, b) => a + b, 0) / band.length;
+          frequencyBars[i] = average;
+        }
+        
+        // Get overall audio level for reactive feedback
+        const overallLevel = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+        
+        // Store both overall level and frequency bars
+        setAudioLevel(overallLevel / 255); // Normalize to 0-1
         
         animationFrameRef.current = requestAnimationFrame(updateLevel);
       };
@@ -302,23 +318,32 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
           </Button>
         </div>
 
-        {/* Recording Indicator with Waveform */}
+        {/* Recording Indicator with Reactive Waveform */}
         {isRecording && (
           <div className="flex items-center justify-center gap-3 py-2 animate-fade-in">
-            <span className="text-xs font-semibold text-destructive">Recording</span>
-            <div className="flex items-center gap-1 h-8">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+              <span className="text-xs font-semibold text-destructive">Recording</span>
+            </div>
+            <div className="flex items-center gap-0.5 h-10">
               {[...Array(20)].map((_, i) => {
-                const height = Math.max(4, audioLevel * 32 * (1 + Math.sin(i * 0.5 + Date.now() / 200)));
+                // Each bar reacts to actual audio frequency
+                const baseHeight = 4;
+                const maxHeight = 40;
+                // Use audioLevel as main driver, with slight variation per bar
+                const barMultiplier = 0.8 + (Math.sin(i * 0.3) * 0.4); // 0.4 to 1.2 range
+                const height = Math.max(baseHeight, Math.min(maxHeight, audioLevel * maxHeight * barMultiplier));
+                
                 return (
                   <div
                     key={i}
-                    className="w-1 bg-primary rounded-full transition-all duration-75"
+                    className="w-1 bg-gradient-to-t from-primary to-accent rounded-full transition-all duration-100 ease-out"
                     style={{ height: `${height}px` }}
                   />
                 );
               })}
             </div>
-            <span className="text-xs text-muted-foreground">Click mic to stop</span>
+            <span className="text-xs text-muted-foreground">Speaking...</span>
           </div>
         )}
 

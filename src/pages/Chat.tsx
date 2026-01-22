@@ -82,6 +82,9 @@ export function Chat() {
     }, 60000);
 
     try {
+      // Get user's timezone
+      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const userCountry = new Intl.Locale(navigator.language).region || 'US';
 
       // Create new conversation if needed
       let convId = currentConversationId;
@@ -116,6 +119,8 @@ export function Chat() {
           goal: input.goal,
           platform: input.platform,
           customTopic: input.customTopic,
+          timezone: userTimezone,
+          country: userCountry,
         },
       });
 
