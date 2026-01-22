@@ -28,11 +28,13 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
   const [isPaused, setIsPaused] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const [frequencyBars, setFrequencyBars] = useState<number[]>(new Array(20).fill(0));
+  const [isSpeechSupported, setIsSpeechSupported] = useState(true);
   const mediaRecorderRef = useRef<any | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const recognitionRef = useRef<any | null>(null);
 
   const handleSubmit = () => {
     if (!customTopic.trim() && !showOptions) return;
@@ -54,6 +56,17 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
       handleSubmit();
     }
   };
+
+  // Check speech recognition support on mount
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const supported = !!SpeechRecognition;
+    setIsSpeechSupported(supported);
+    
+    if (!supported) {
+      console.log('Speech recognition not supported on this browser/device');
+    }
+  }, []);
 
   // Cleanup audio visualization on unmount
   useEffect(() => {
@@ -127,23 +140,30 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
 
   // Voice recording using Web Speech API
   const startVoiceRecording = async () => {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      alert('Voice input is not supported in your browser. Please use Chrome or Edge.');
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      toast({
+        title: 'Voice input not supported',
+        description: 'Your browser doesn\'t support voice input. Please type instead or use Chrome on Android.',
+        variant: 'destructive',
+      });
       return;
     }
 
     try {
-      // Start audio visualization
+      // Request microphone permission
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
       await startAudioVisualization(stream);
 
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
 
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
+      recognition.maxAlternatives = 1;
 
       recognition.onstart = () => {
         setIsRecording(true);
@@ -182,18 +202,40 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
 
       recognition.start();
       mediaRecorderRef.current = recognition;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to start voice recording:', error);
-      alert('Could not access microphone. Please check permissions.');
+      
+      let errorMessage = 'Could not access microphone.';
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'Microphone permission denied. Please allow microphone access in your browser settings.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = 'No microphone found. Please connect a microphone and try again.';
+      }
+      
+      toast({
+        title: 'Voice input failed',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+      
+      // Cleanup on error
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+      }
     }
   };
 
   const pauseVoiceRecording = () => {
-    if (mediaRecorderRef.current && !isPaused) {
-      mediaRecorderRef.current.stop();
-      setIsPaused(true);
-      setAudioLevel(0);
-      setFrequencyBars(new Array(20).fill(0));
+    if (recognitionRef.current && !isPaused) {
+      try {
+        recognitionRef.current.stop();
+        setIsPaused(true);
+        setAudioLevel(0);
+        setFrequencyBars(new Array(20).fill(0));
+      } catch (error) {
+        console.error('Error pausing recognition:', error);
+      }
     }
   };
 
@@ -203,11 +245,15 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
       
       // Restart speech recognition
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRecognition) return;
+      
       const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
 
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
+      recognition.maxAlternatives = 1;
 
       recognition.onresult = (event: any) => {
         let finalTranscript = '';
@@ -259,8 +305,16 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
   };
 
   const stopVoiceRecording = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (error) {
+        console.error('Error stopping recognition:', error);
+      }
+      recognitionRef.current = null;
+    }
+    
     if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop();
       mediaRecorderRef.current = null;
     }
     
@@ -387,22 +441,25 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
               rows={1}
             />
             {/* Voice Button Inside Textarea */}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={toggleVoiceRecording}
-              disabled={disabled}
-              className={`absolute right-2 bottom-2 h-8 w-8 ${
-                isRecording ? 'text-destructive animate-pulse' : ''
-              }`}
-            >
-              {isRecording ? (
-                <Square className="h-4 w-4" />
-              ) : (
-                <Mic className="h-4 w-4" />
-              )}
-            </Button>
+            {isSpeechSupported && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={toggleVoiceRecording}
+                disabled={disabled}
+                className={`absolute right-2 bottom-2 h-8 w-8 ${
+                  isRecording ? 'text-destructive animate-pulse' : ''
+                }`}
+                title={isSpeechSupported ? 'Click to use voice input' : 'Voice input not supported on this browser'}
+              >
+                {isRecording ? (
+                  <Square className="h-4 w-4" />
+                ) : (
+                  <Mic className="h-4 w-4" />
+                )}
+              </Button>
+            )}
           </div>
           <Button
             onClick={handleSubmit}
@@ -481,7 +538,7 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
 
         {!isRecording && (
           <p className="text-xs text-center text-muted-foreground">
-            Press Enter to generate • Shift + Enter for new line • Click mic for voice input
+            Press Enter to generate • Shift + Enter for new line{isSpeechSupported ? ' • Click mic for voice input' : ''}
           </p>
         )}
       </div>
