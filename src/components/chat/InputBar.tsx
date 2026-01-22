@@ -25,11 +25,14 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('tiktok');
   const [showOptions, setShowOptions] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
+  const [frequencyBars, setFrequencyBars] = useState<number[]>(new Array(20).fill(0));
   const mediaRecorderRef = useRef<any | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
 
   const handleSubmit = () => {
     if (!customTopic.trim() && !showOptions) return;
@@ -79,28 +82,40 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
       analyserRef.current = analyser;
       
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      const frequencyBars = new Uint8Array(20); // 20 bars for visualization
       
       const updateLevel = () => {
-        if (!analyserRef.current) return;
+        if (!analyserRef.current || isPaused) {
+          // Keep animation going even when paused, but with minimal values
+          if (isPaused) {
+            setAudioLevel(0);
+            setFrequencyBars(new Array(20).fill(0));
+          }
+          if (!isPaused) {
+            animationFrameRef.current = requestAnimationFrame(updateLevel);
+          }
+          return;
+        }
         
         analyserRef.current.getByteFrequencyData(dataArray);
         
         // Split frequency data into 20 bands for each bar
         const bandSize = Math.floor(dataArray.length / 20);
+        const bars: number[] = [];
+        
         for (let i = 0; i < 20; i++) {
           const start = i * bandSize;
           const end = start + bandSize;
           const band = dataArray.slice(start, end);
           const average = band.reduce((a, b) => a + b, 0) / band.length;
-          frequencyBars[i] = average;
+          bars.push(average / 255); // Normalize to 0-1
         }
         
         // Get overall audio level for reactive feedback
         const overallLevel = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
         
-        // Store both overall level and frequency bars
+        // Update state with both overall level and individual bars
         setAudioLevel(overallLevel / 255); // Normalize to 0-1
+        setFrequencyBars(bars);
         
         animationFrameRef.current = requestAnimationFrame(updateLevel);
       };
@@ -121,6 +136,7 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
     try {
       // Start audio visualization
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
       await startAudioVisualization(stream);
 
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -132,6 +148,7 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
 
       recognition.onstart = () => {
         setIsRecording(true);
+        setIsPaused(false);
       };
 
       recognition.onresult = (event: any) => {
@@ -158,7 +175,10 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
       };
 
       recognition.onend = () => {
-        stopVoiceRecording();
+        // Only stop if not paused (pause will restart recognition)
+        if (!isPaused) {
+          stopVoiceRecording();
+        }
       };
 
       recognition.start();
@@ -166,6 +186,76 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
     } catch (error) {
       console.error('Failed to start voice recording:', error);
       alert('Could not access microphone. Please check permissions.');
+    }
+  };
+
+  const pauseVoiceRecording = () => {
+    if (mediaRecorderRef.current && !isPaused) {
+      mediaRecorderRef.current.stop();
+      setIsPaused(true);
+      setAudioLevel(0);
+      setFrequencyBars(new Array(20).fill(0));
+    }
+  };
+
+  const resumeVoiceRecording = () => {
+    if (isPaused && isRecording) {
+      setIsPaused(false);
+      
+      // Restart speech recognition
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event: any) => {
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript + ' ';
+          }
+        }
+        if (finalTranscript) {
+          setCustomTopic((prev) => prev + finalTranscript);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        stopVoiceRecording();
+      };
+
+      recognition.start();
+      mediaRecorderRef.current = recognition;
+      
+      // Resume audio visualization
+      if (analyserRef.current && animationFrameRef.current === null) {
+        const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+        const updateLevel = () => {
+          if (!analyserRef.current || isPaused) return;
+          
+          analyserRef.current.getByteFrequencyData(dataArray);
+          const bandSize = Math.floor(dataArray.length / 20);
+          const bars: number[] = [];
+          
+          for (let i = 0; i < 20; i++) {
+            const start = i * bandSize;
+            const end = start + bandSize;
+            const band = dataArray.slice(start, end);
+            const average = band.reduce((a, b) => a + b, 0) / band.length;
+            bars.push(average / 255);
+          }
+          
+          const overallLevel = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+          setAudioLevel(overallLevel / 255);
+          setFrequencyBars(bars);
+          
+          animationFrameRef.current = requestAnimationFrame(updateLevel);
+        };
+        updateLevel();
+      }
     }
   };
 
@@ -185,8 +275,15 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
       audioContextRef.current = null;
     }
     
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+    }
+    
     setIsRecording(false);
+    setIsPaused(false);
     setAudioLevel(0);
+    setFrequencyBars(new Array(20).fill(0));
   };
 
   const toggleVoiceRecording = () => {
@@ -320,30 +417,74 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
 
         {/* Recording Indicator with Reactive Waveform */}
         {isRecording && (
-          <div className="flex items-center justify-center gap-3 py-2 animate-fade-in">
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
-              <span className="text-xs font-semibold text-destructive">Recording</span>
+          <div className="space-y-3 animate-fade-in">
+            <div className="flex items-center justify-center gap-3 py-2">
+              <div className="flex items-center gap-1.5">
+                <div className={`w-2 h-2 rounded-full ${isPaused ? 'bg-yellow-500' : 'bg-destructive animate-pulse'}`} />
+                <span className={`text-xs font-semibold ${isPaused ? 'text-yellow-500' : 'text-destructive'}`}>
+                  {isPaused ? 'Paused' : 'Recording'}
+                </span>
+              </div>
+              <div className="flex items-center gap-0.5 h-10">
+                {frequencyBars.map((level, i) => {
+                  // Each bar shows actual frequency data
+                  const baseHeight = 4;
+                  const maxHeight = 40;
+                  // Use individual frequency bar data
+                  const height = isPaused 
+                    ? baseHeight 
+                    : Math.max(baseHeight, Math.min(maxHeight, level * maxHeight * 1.5));
+                  
+                  return (
+                    <div
+                      key={i}
+                      className="w-1 bg-gradient-to-t from-primary via-accent to-primary rounded-full transition-all duration-75 ease-out"
+                      style={{ 
+                        height: `${height}px`,
+                        opacity: isPaused ? 0.3 : 1
+                      }}
+                    />
+                  );
+                })}
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {isPaused ? 'Tap resume' : 'Speaking...'}
+              </span>
             </div>
-            <div className="flex items-center gap-0.5 h-10">
-              {[...Array(20)].map((_, i) => {
-                // Each bar reacts to actual audio frequency
-                const baseHeight = 4;
-                const maxHeight = 40;
-                // Use audioLevel as main driver, with slight variation per bar
-                const barMultiplier = 0.8 + (Math.sin(i * 0.3) * 0.4); // 0.4 to 1.2 range
-                const height = Math.max(baseHeight, Math.min(maxHeight, audioLevel * maxHeight * barMultiplier));
-                
-                return (
-                  <div
-                    key={i}
-                    className="w-1 bg-gradient-to-t from-primary to-accent rounded-full transition-all duration-100 ease-out"
-                    style={{ height: `${height}px` }}
-                  />
-                );
-              })}
+            
+            {/* Pause/Resume/Stop Controls */}
+            <div className="flex items-center justify-center gap-2">
+              {isPaused ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={resumeVoiceRecording}
+                  className="h-8 px-4 border-primary/40 hover:bg-primary/10"
+                >
+                  Resume
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={pauseVoiceRecording}
+                  className="h-8 px-4 border-yellow-500/40 hover:bg-yellow-500/10"
+                >
+                  Pause
+                </Button>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={stopVoiceRecording}
+                className="h-8 px-4 border-destructive/40 hover:bg-destructive/10"
+              >
+                Stop
+              </Button>
             </div>
-            <span className="text-xs text-muted-foreground">Speaking...</span>
           </div>
         )}
 

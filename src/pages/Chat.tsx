@@ -36,6 +36,10 @@ export function Chat() {
 
   // Load conversation messages when conversationId changes
   useEffect(() => {
+    // Reset state when switching conversations
+    setIsGenerating(false);
+    setGenerationError(null);
+    
     if (conversationId) {
       loadConversation(conversationId);
     } else {
@@ -43,7 +47,7 @@ export function Chat() {
       setMessages([]);
       setCurrentConversationId(null);
     }
-  }, [conversationId]);
+  }, [conversationId]); // This will trigger whenever the URL param changes
 
   const loadConversation = async (id: string) => {
     setIsLoadingHistory(true);
