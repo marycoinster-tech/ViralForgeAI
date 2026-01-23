@@ -4,6 +4,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { NICHES, VIBES, GOALS, PLATFORMS } from '@/constants/options';
 import { GeneratorInput, Niche, Vibe, Goal, Platform } from '@/types/content';
 import { Sparkles, ChevronDown, Mic, Square, Pause, Play } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import {
   Select,
   SelectContent,
@@ -18,6 +19,7 @@ interface InputBarProps {
 }
 
 export function InputBar({ onGenerate, disabled }: InputBarProps) {
+  const { toast } = useToast();
   const [customTopic, setCustomTopic] = useState('');
   const [selectedNiche, setSelectedNiche] = useState<Niche>('anime');
   const [selectedVibe, setSelectedVibe] = useState<Vibe>('dark');

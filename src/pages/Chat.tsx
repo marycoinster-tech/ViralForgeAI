@@ -32,7 +32,9 @@ export function Chat() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [lastInput, setLastInput] = useState<GeneratorInput | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [streamingContent, setStreamingContent] = useState<string>('');
   const generationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Load conversation messages when conversationId changes
   useEffect(() => {
@@ -50,7 +52,11 @@ export function Chat() {
   }, [conversationId]); // This will trigger whenever the URL param changes
 
   const loadConversation = async (id: string) => {
+    if (isLoadingHistory) return; // Prevent duplicate loads
+    
     setIsLoadingHistory(true);
+    setStreamingContent(''); // Clear any streaming content
+    
     try {
       const { data, error } = await supabase
         .from('messages')
@@ -78,11 +84,16 @@ export function Chat() {
     setIsGenerating(true);
     setGenerationError(null);
     setLastInput(input);
+    setStreamingContent('');
+
+    // Create abort controller for cancellation
+    abortControllerRef.current = new AbortController();
 
     // Set timeout to detect hung generations (60 seconds)
     generationTimeoutRef.current = setTimeout(() => {
       setGenerationError('Generation is taking too long. Please try again.');
       setIsGenerating(false);
+      abortControllerRef.current?.abort();
     }, 60000);
 
     try {
@@ -114,41 +125,98 @@ export function Chat() {
         navigate(`/app/${convId}`, { replace: true });
       }
 
-      // Call Edge Function to generate content
-      const { data, error } = await supabase.functions.invoke('generate-content', {
-        body: {
-          conversationId: convId,
+      // Add user message to UI immediately
+      const tempUserMessage: Message = {
+        id: `temp-${Date.now()}`,
+        role: 'user',
+        content: input.customTopic || {
           niche: input.niche,
           vibe: input.vibe,
           goal: input.goal,
           platform: input.platform,
-          customTopic: input.customTopic,
-          timezone: userTimezone,
-          country: userCountry,
         },
-      });
+        created_at: new Date().toISOString(),
+      };
+      setMessages(prev => [...prev, tempUserMessage]);
 
-      if (error) {
-        let errorMessage = error.message;
-        if (error instanceof FunctionsHttpError) {
-          try {
-            const statusCode = error.context?.status ?? 500;
-            const textContent = await error.context?.text();
-            errorMessage = `[Code: ${statusCode}] ${textContent || error.message || 'Unknown error'}`;
-          } catch {
-            errorMessage = `${error.message || 'Failed to read response'}`;
+      // Get auth token for streaming request
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      // Call Edge Function with streaming
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-content`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            conversationId: convId,
+            niche: input.niche,
+            vibe: input.vibe,
+            goal: input.goal,
+            platform: input.platform,
+            customTopic: input.customTopic,
+            timezone: userTimezone,
+            country: userCountry,
+          }),
+          signal: abortControllerRef.current.signal,
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Generation failed: ${errorText}`);
+      }
+
+      // Read streaming response
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body');
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let accumulatedContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              // Clear timeout on completion
+              if (generationTimeoutRef.current) {
+                clearTimeout(generationTimeoutRef.current);
+              }
+              // Reload conversation to get saved messages
+              await loadConversation(convId!);
+              setStreamingContent('');
+              continue;
+            }
+
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.content) {
+                accumulatedContent += parsed.content;
+                setStreamingContent(accumulatedContent);
+              } else if (parsed.error) {
+                throw new Error(parsed.error);
+              }
+            } catch (e: any) {
+              if (e.message !== 'Unexpected end of JSON input') {
+                console.error('Parse error:', e);
+              }
+            }
           }
         }
-        throw new Error(errorMessage);
       }
-
-      // Clear timeout on success
-      if (generationTimeoutRef.current) {
-        clearTimeout(generationTimeoutRef.current);
-      }
-
-      // Reload messages to get the new user message and AI response
-      await loadConversation(convId!);
 
     } catch (error: any) {
       // Clear timeout on error
@@ -156,15 +224,20 @@ export function Chat() {
         clearTimeout(generationTimeoutRef.current);
       }
       
-      setGenerationError(error.message);
-      console.error('Generation error:', error);
-      toast({
-        title: 'Generation failed',
-        description: error.message,
-        variant: 'destructive',
-      });
+      if (error.name === 'AbortError') {
+        setGenerationError('Generation cancelled');
+      } else {
+        setGenerationError(error.message);
+        console.error('Generation error:', error);
+        toast({
+          title: 'Generation failed',
+          description: error.message,
+          variant: 'destructive',
+        });
+      }
     } finally {
       setIsGenerating(false);
+      setStreamingContent('');
     }
   };
 
@@ -178,7 +251,9 @@ export function Chat() {
     if (generationTimeoutRef.current) {
       clearTimeout(generationTimeoutRef.current);
     }
+    abortControllerRef.current?.abort();
     setIsGenerating(false);
+    setStreamingContent('');
     setGenerationError('Generation cancelled');
   };
 
@@ -289,9 +364,27 @@ export function Chat() {
                   return <AIMessage key={message.id} content={message.content} />;
                 })}
 
-                {isGenerating && (
+                {(isGenerating || streamingContent) && (
                   <div className="space-y-4">
-                    <LoadingIndicator />
+                    {streamingContent ? (
+                      <div className="mb-6 animate-fade-in">
+                        <div className="max-w-3xl glass-card p-6">
+                          <div className="flex items-start gap-3 mb-4">
+                            <div className="mt-1 p-2 rounded-lg bg-gradient-to-br from-primary/20 to-accent/20">
+                              <Sparkles className="h-4 w-4 text-primary" />
+                            </div>
+                            <div className="flex-1 min-w-0 space-y-3">
+                              <div className="text-sm text-foreground/90 whitespace-pre-wrap typewriter">
+                                {streamingContent}
+                                <span className="inline-block w-1 h-4 ml-1 bg-primary animate-pulse" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <LoadingIndicator />
+                    )}
                     <div className="flex justify-center">
                       <Button
                         variant="outline"

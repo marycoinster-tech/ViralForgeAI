@@ -161,9 +161,9 @@ You can format your responses however works best - markdown, plain text, or stru
 
     messages.push({ role: 'user', content: userMessage });
 
-    console.log('Calling OnSpace AI...');
+    console.log('Calling OnSpace AI with streaming...');
 
-    // Call OnSpace AI
+    // Call OnSpace AI with streaming enabled
     const aiResponse = await fetch(`${ONSPACE_AI_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -175,6 +175,7 @@ You can format your responses however works best - markdown, plain text, or stru
         messages: messages,
         temperature: 0.8,
         max_tokens: 2000,
+        stream: true,
       }),
     });
 
@@ -184,111 +185,163 @@ You can format your responses however works best - markdown, plain text, or stru
       throw new Error(`AI service error: ${errorText}`);
     }
 
-    const aiData = await aiResponse.json();
-    const aiContent = aiData.choices[0].message.content;
-
-    console.log('AI response received:', aiContent.substring(0, 200));
-
-    // Try to parse as structured content, otherwise treat as plain chat
-    let messageContent: any;
-    
-    // First, try to extract JSON for viral content
-    try {
-      const jsonMatch = aiContent.match(/```json\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[1].trim());
-        // Check if it's viral content structure
-        if (parsed.hook && parsed.script && parsed.caption) {
-          messageContent = parsed;
-        } else {
-          messageContent = aiContent; // Plain text
-        }
-      } else {
-        // Try parsing entire content as JSON
+    // Stream the response back to client
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
         try {
-          const parsed = JSON.parse(aiContent.trim());
-          if (parsed.hook && parsed.script && parsed.caption) {
-            messageContent = parsed;
-          } else {
-            messageContent = aiContent; // Plain text
+          const reader = aiResponse.body?.getReader();
+          if (!reader) throw new Error('No response body');
+
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let aiContent = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6);
+                if (data === '[DONE]') continue;
+
+                try {
+                  const parsed = JSON.parse(data);
+                  const content = parsed.choices?.[0]?.delta?.content;
+                  if (content) {
+                    aiContent += content;
+                    // Send chunk to client
+                    controller.enqueue(
+                      encoder.encode(`data: ${JSON.stringify({ content })}
+
+`)
+                    );
+                  }
+                } catch (e) {
+                  console.error('Parse error:', e);
+                }
+              }
+            }
           }
-        } catch {
-          messageContent = aiContent; // Plain text
+
+          console.log('AI streaming completed, content length:', aiContent.length);
+
+          // Try to parse as structured content, otherwise treat as plain chat
+          let messageContent: any;
+          
+          // First, try to extract JSON for viral content
+          try {
+            const jsonMatch = aiContent.match(/```json\s*([\s\S]*?)\s*```/);
+            if (jsonMatch) {
+              const parsed = JSON.parse(jsonMatch[1].trim());
+              // Check if it's viral content structure
+              if (parsed.hook && parsed.script && parsed.caption) {
+                messageContent = parsed;
+              } else {
+                messageContent = aiContent; // Plain text
+              }
+            } else {
+              // Try parsing entire content as JSON
+              try {
+                const parsed = JSON.parse(aiContent.trim());
+                if (parsed.hook && parsed.script && parsed.caption) {
+                  messageContent = parsed;
+                } else {
+                  messageContent = aiContent; // Plain text
+                }
+              } catch {
+                messageContent = aiContent; // Plain text
+              }
+            }
+          } catch (e) {
+            console.log('Not structured content, treating as chat message');
+            messageContent = aiContent; // Plain text chat
+          }
+
+          // Save user message to database
+          const { error: userMsgError } = await supabaseClient
+            .from('messages')
+            .insert({
+              conversation_id: conversationId,
+              role: 'user',
+              content: customTopic || {
+                niche,
+                vibe,
+                goal,
+                platform,
+              },
+            });
+
+          if (userMsgError) {
+            console.error('Failed to save user message:', userMsgError);
+          }
+
+          // Save AI response to database
+          const { error: aiMsgError } = await supabaseClient
+            .from('messages')
+            .insert({
+              conversation_id: conversationId,
+              role: 'assistant',
+              content: messageContent,
+            });
+
+          if (aiMsgError) {
+            console.error('Failed to save AI message:', aiMsgError);
+          }
+
+          // Generate conversation title if not already done
+          const { data: conversation } = await supabaseClient
+            .from('conversations')
+            .select('is_title_generated')
+            .eq('id', conversationId)
+            .single();
+
+          if (conversation && !conversation.is_title_generated) {
+            // Generate title based on the content
+            let title = 'New conversation';
+            if (customTopic) {
+              title = customTopic.substring(0, 50);
+            } else {
+              title = `${niche} ${vibe} content`.substring(0, 50);
+            }
+
+            await supabaseClient
+              .from('conversations')
+              .update({ 
+                title,
+                is_title_generated: true,
+              })
+              .eq('id', conversationId);
+          }
+
+          console.log('Content generated successfully');
+
+          // Send completion signal
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+        } catch (error: any) {
+          console.error('Streaming error:', error);
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ error: error.message })}\n\n`)
+          );
+          controller.close();
         }
-      }
-    } catch (e) {
-      console.log('Not structured content, treating as chat message');
-      messageContent = aiContent; // Plain text chat
-    }
+      },
+    });
 
-    // Save user message to database
-    const { error: userMsgError } = await supabaseClient
-      .from('messages')
-      .insert({
-        conversation_id: conversationId,
-        role: 'user',
-        content: customTopic || {
-          niche,
-          vibe,
-          goal,
-          platform,
-        },
-      });
-
-    if (userMsgError) {
-      console.error('Failed to save user message:', userMsgError);
-    }
-
-    // Save AI response to database
-    const { error: aiMsgError } = await supabaseClient
-      .from('messages')
-      .insert({
-        conversation_id: conversationId,
-        role: 'assistant',
-        content: messageContent,
-      });
-
-    if (aiMsgError) {
-      console.error('Failed to save AI message:', aiMsgError);
-    }
-
-    // Generate conversation title if not already done
-    const { data: conversation } = await supabaseClient
-      .from('conversations')
-      .select('is_title_generated')
-      .eq('id', conversationId)
-      .single();
-
-    if (conversation && !conversation.is_title_generated) {
-      // Generate title based on the content
-      let title = 'New conversation';
-      if (customTopic) {
-        title = customTopic.substring(0, 50);
-      } else {
-        title = `${niche} ${vibe} content`.substring(0, 50);
-      }
-
-      await supabaseClient
-        .from('conversations')
-        .update({ 
-          title,
-          is_title_generated: true,
-        })
-        .eq('id', conversationId);
-    }
-
-    console.log('Content generated successfully');
-
-    return new Response(
-      JSON.stringify({ 
-        success: true,
-        content: messageContent,
-      }),
-      { 
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    );
+    return new Response(stream, {
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
 
   } catch (error: any) {
     console.error('Generation error:', error);
