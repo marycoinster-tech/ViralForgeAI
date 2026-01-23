@@ -10,8 +10,10 @@ import {
   LogOut, 
   Settings as SettingsIcon,
   Sparkles,
-  User
+  User,
+  Trash2
 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface Conversation {
   id: string;
@@ -27,8 +29,10 @@ export function Sidebar({ onClose }: SidebarProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { toast } = useToast();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -65,6 +69,49 @@ export function Sidebar({ onClose }: SidebarProps) {
 
   const isActiveConversation = (id: string) => {
     return location.pathname === `/app/${id}`;
+  };
+
+  const handleDeleteConversation = async (id: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Confirm deletion
+    if (!confirm('Delete this conversation? This action cannot be undone.')) {
+      return;
+    }
+
+    setDeletingId(id);
+
+    try {
+      const { error } = await supabase
+        .from('conversations')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // Remove from local state
+      setConversations(prev => prev.filter(conv => conv.id !== id));
+
+      // If deleting the active conversation, redirect to new chat
+      if (isActiveConversation(id)) {
+        navigate('/app');
+      }
+
+      toast({
+        title: 'Deleted',
+        description: 'Conversation deleted successfully',
+      });
+    } catch (error: any) {
+      console.error('Failed to delete conversation:', error);
+      toast({
+        title: 'Failed to delete',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -104,25 +151,34 @@ export function Sidebar({ onClose }: SidebarProps) {
           </div>
         ) : (
           conversations.map((conv) => (
-            <Link
-              key={conv.id}
-              to={`/app/${conv.id}`}
-              onClick={onClose}
-              className={`flex items-center gap-3 p-3 rounded-lg transition-colors group ${
-                isActiveConversation(conv.id)
-                  ? 'bg-primary/10 border border-primary/20'
-                  : 'hover:bg-muted/50'
-              }`}
-            >
-              <MessageSquare className={`h-4 w-4 flex-shrink-0 ${
-                isActiveConversation(conv.id)
-                  ? 'text-primary'
-                  : 'text-muted-foreground group-hover:text-primary'
-              }`} />
-              <span className="text-sm truncate flex-1">
-                {conv.title}
-              </span>
-            </Link>
+            <div key={conv.id} className="relative group/item">
+              <Link
+                to={`/app/${conv.id}`}
+                onClick={onClose}
+                className={`flex items-center gap-3 p-3 pr-10 rounded-lg transition-colors group ${
+                  isActiveConversation(conv.id)
+                    ? 'bg-primary/10 border border-primary/20'
+                    : 'hover:bg-muted/50'
+                }`}
+              >
+                <MessageSquare className={`h-4 w-4 flex-shrink-0 ${
+                  isActiveConversation(conv.id)
+                    ? 'text-primary'
+                    : 'text-muted-foreground group-hover:text-primary'
+                }`} />
+                <span className="text-sm truncate flex-1">
+                  {conv.title}
+                </span>
+              </Link>
+              <button
+                onClick={(e) => handleDeleteConversation(conv.id, e)}
+                disabled={deletingId === conv.id}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded opacity-0 group-hover/item:opacity-100 hover:bg-destructive/10 transition-all disabled:opacity-50"
+                title="Delete conversation"
+              >
+                <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+              </button>
+            </div>
           ))
         )}
       </div>
