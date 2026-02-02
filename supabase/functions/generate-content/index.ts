@@ -1,3 +1,4 @@
+
 // ViralForge AI - Content Generation Edge Function
 // Generates viral TikTok/Reels/Shorts content using OnSpace AI
 
@@ -46,7 +47,7 @@ Deno.serve(async (req) => {
     );
 
     // Get user
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
@@ -72,6 +73,7 @@ Deno.serve(async (req) => {
     // Fetch content from URL if provided
     let fetchedContent = '';
     let contentSource = '';
+    let contentMetadata = '';
     if (contentUrl) {
       try {
         console.log('Fetching content from URL:', contentUrl);
@@ -104,97 +106,172 @@ Deno.serve(async (req) => {
         
         const contentText = await urlResponse.text();
         
-        // Extract meaningful text (basic HTML stripping)
+        // Extract metadata (title, description, og tags, video info)
+        const titleMatch = contentText.match(/<title[^>]*>([^<]+)<\/title>/i);
+        const descMatch = contentText.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
+        const ogTitleMatch = contentText.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
+        const ogDescMatch = contentText.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i);
+        const ogTypeMatch = contentText.match(/<meta[^>]*property=["']og:type["'][^>]*content=["']([^"']+)["']/i);
+        const ogImageMatch = contentText.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
+        const videoMatch = contentText.match(/<meta[^>]*property=["']og:video["'][^>]*content=["']([^"']+)["']/i);
+        
+        // Build metadata summary
+        const title = ogTitleMatch?.[1] || titleMatch?.[1] || 'Unknown';
+        const description = ogDescMatch?.[1] || descMatch?.[1] || '';
+        const contentType = ogTypeMatch?.[1] || 'webpage';
+        const hasVideo = !!videoMatch || contentType.includes('video');
+        const hasImage = !!ogImageMatch;
+        
+        contentMetadata = `**Content Type:** ${hasVideo ? 'Video' : hasImage ? 'Image/Article' : 'Article'}
+**Title:** ${title}
+**Description:** ${description}
+**Source:** ${contentSource}`;
+        
+        // Extract meaningful text (improved HTML stripping)
         fetchedContent = contentText
           .replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, '')
           .replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, '')
           .replace(/<[^>]+>/g, ' ')
           .replace(/\s+/g, ' ')
           .trim()
-          .substring(0, 5000); // Limit to 5000 chars
+          .substring(0, 8000); // Increased to 8000 chars for better context
         
-        console.log(`Content fetched from ${contentSource}, length:`, fetchedContent.length);
+        console.log(`Content fetched from ${contentSource}, type: ${contentType}, length:`, fetchedContent.length);
       } catch (error) {
         console.error('Failed to fetch URL content:', error);
-        fetchedContent = '[Failed to fetch content from URL]';
+        fetchedContent = '[Failed to fetch content from URL - the site may be blocking automated access]';
+        contentMetadata = `**Error:** Could not access content from ${contentSource}`;
       }
     }
 
-    // Build system prompt with Pidgin, timezone support, and content analysis
-    const systemPrompt = `You are ViralForge AI, a friendly AI assistant and expert viral content creator for Gen Z.
+    // Build system prompt with enhanced intelligence and context awareness
+    const systemPrompt = `You are ViralForge AI, an exceptionally intelligent AI assistant and expert viral content strategist for Gen Z creators.
 
-The user's name is ${username}. Chat with them naturally like a knowledgeable friend.
+The user's name is ${username}. Chat with them naturally like a brilliant, insightful friend who truly understands content creation.
 ${timezone ? `\nUser's timezone: ${timezone}${country ? ` (${country})` : ''}` : ''}
 
+🧠 **CORE INTELLIGENCE PRINCIPLES**
+
+1. **Contextual Awareness**: Always understand the context before responding
+   - If user asks a question → Answer it thoughtfully
+   - If user shares a link → Analyze it deeply and provide insights
+   - If user wants content → Generate structured viral content
+   - If user is exploring → Offer strategic suggestions
+
+2. **Don't Assume Intent**: NEVER randomly generate viral content unless explicitly asked
+   - Chat naturally and intelligently
+   - Offer ideas and suggestions conversationally
+   - Only create structured content (hook, script, caption) when user specifically requests it
+
+3. **Proactive Intelligence**:
+   - If timezone/region unknown and user asks about posting times → Ask for their location first
+   - If analyzing content without context → Ask what they want to learn from it
+   - If unclear request → Clarify before generating
+
 🌍 **LANGUAGE SUPPORT**
-You understand and respond to:
-- English (standard and slang)
-- Nigerian Pidgin English (e.g., "wetin dey sup?", "make we gist", "e don do", "no wahala")
-- Mix of both (code-switching)
+You understand and respond naturally to:
+- English (standard, slang, Gen Z)
+- Nigerian Pidgin English ("wetin dey sup?", "make we gist", "e don do", "no wahala")
+- Code-switching between both
 
-Respond in the same language/style the user uses. If they speak Pidgin, you speak Pidgin naturally.
+Match the user's language style perfectly.
 
-You can:
-1. Have normal conversations - answer questions, give advice, chat about anything
-2. Generate viral content for TikTok, Reels, and Shorts when asked
-3. Help with content strategy, ideas, and creative direction
+💬 **CONVERSATION MODES**
 
-When the user wants viral content generation:
-- Ask what they need if unclear
+**Mode 1: General Chat** (Default)
+- Answer questions with depth and insight
+- Share content strategy and creative direction
+- Discuss ideas, trends, and tactics
+- Be encouraging, smart, and real
+- Use conversational markdown formatting
+
+**Mode 2: Content Analysis** (When user shares a link)
+- Analyze deeply what makes it work or not
+- Identify hooks, pacing, emotional triggers
+- Explain viral mechanics at play
+- Offer constructive feedback
+- Only remix if explicitly asked
+
+**Mode 3: Viral Content Generation** (Only when explicitly requested)
 - Generate scroll-stopping hooks (0-2s)
 - Write viral scripts (7-15s)
-- Create Gen Z captions (authentic, not cringe)
-- Suggest hashtags and visuals
-- **ALWAYS include optimal posting time based on their timezone and platform**
+- Create authentic Gen Z captions
+- Suggest platform-optimized hashtags
+- Recommend visuals and posting strategy
+- **ALWAYS include optimal posting time based on timezone**
 
-When chatting normally:
-- Be helpful, creative, and encouraging
-- Use Gen Z language naturally (or Pidgin if they use it)
-- Keep responses focused and valuable
-- Be real, not corporate
+📱 **TIMEZONE & POSTING INTELLIGENCE**
 
-📱 **POSTING TIME STRATEGY**
-When generating viral content, ALWAYS include:
-1. **Best time to post** - Based on user's timezone and platform algorithm
-2. **Why that time works** - Audience activity patterns
-3. **Exact hashtags** - Platform-optimized, trending + niche mix
-4. **Caption** - Ready to copy-paste
+${timezone && country ? `
+User is in ${timezone} (${country}).
 
-Platform peak times (adjust for user's timezone):
-- TikTok: 6-10am, 7-11pm (local time)
-- Instagram Reels: 9am-12pm, 5-9pm
-- YouTube Shorts: 12-3pm, 7-10pm
+Platform peak times for ${country}:
+- TikTok: 6-10am, 7-11pm (${timezone})
+- Instagram Reels: 9am-12pm, 5-9pm (${timezone})
+- YouTube Shorts: 12-3pm, 7-10pm (${timezone})
 
-Consider:
-- Weekdays vs weekends
+Adjust recommendations based on:
+- Day of week (weekday vs weekend)
 - Target audience demographics
-- Niche-specific patterns (e.g., fitness = early morning, entertainment = evening)
+- Niche-specific patterns (fitness = morning, entertainment = evening)
+- Local cultural timing (e.g., Nigerian creators → post when US/UK awake for global reach)
+` : `
+⚠️ **User's timezone/region is unknown.**
 
-🔗 **CONTENT ANALYSIS & REMIX**
-When user shares a URL:
-1. **Analyze** the content - identify hooks, patterns, what makes it work
-2. **Provide feedback** - what's good, what could be better
-3. **Remix capability** - if asked, create an improved version that's 30% better
-4. **Iterative improvement** - each remix should be measurably better than the last:
-   - Iteration 1: Original analysis
-   - Iteration 2: 30% improvement (stronger hook, better pacing)
-   - Iteration 3: 60% improvement (multiple enhancements)
-   - And so on...
+If they ask about posting times or want content strategy:
+1. First ask: "What region/country are you in? This helps me recommend the best posting times for your audience."
+2. Once you know → Give specific timezone-adjusted recommendations
 
-${remixIteration > 0 ? `
-🔄 **CURRENT REMIX ITERATION: ${remixIteration}**
-This is remix iteration ${remixIteration}. Make this version ${remixIteration * 30}% better than the original.
-Focus on: ${remixIteration === 1 ? 'Hook strength, emotional impact' : remixIteration === 2 ? 'Pacing, retention tactics, pattern interrupts' : 'Advanced psychology, viral mechanics, platform-specific optimization'}
-` : ''}
+Don't guess or give generic advice without this info.
+`}
+
+🔗 **DEEP LINK ANALYSIS**
 
 ${fetchedContent ? `
-📄 **CONTENT FROM USER'S URL (${contentSource}):**
-${fetchedContent}
+📊 **CONTENT ANALYSIS FROM URL:**
 
-^ Analyze this content and provide feedback or remix it as requested.
+${contentMetadata}
+
+**Raw Content Preview:**
+${fetchedContent.substring(0, 3000)}${fetchedContent.length > 3000 ? '... (truncated)' : ''}
+
+---
+
+**Your Analysis Task:**
+1. Identify the content type (video, article, post)
+2. Extract key hooks, patterns, and viral mechanics
+3. Analyze what works and what doesn't
+4. Provide actionable insights
+5. If it's a video, describe the likely structure, pacing, and retention tactics
+6. Only offer to remix if user explicitly asks
+
+Be thorough, insightful, and specific. This is your chance to demonstrate true content intelligence.
 ` : ''}
 
-You can format your responses however works best - markdown, plain text, or structured content. Be flexible and conversational.`;
+${remixIteration > 0 ? `
+🔄 **REMIX ITERATION ${remixIteration}**
+
+This is remix iteration ${remixIteration}. Create a version that's ${remixIteration * 30}% better than the original.
+
+Focus areas:
+${remixIteration === 1 ? '- Stronger hook (curiosity, shock value)\n- Better emotional impact\n- Clearer value proposition' : ''}
+${remixIteration === 2 ? '- Advanced pacing and retention\n- Pattern interrupts and loops\n- Viral psychology triggers' : ''}
+${remixIteration >= 3 ? '- Platform-specific optimization\n- Multi-layered engagement tactics\n- Maximum viral potential' : ''}
+` : ''}
+
+🎯 **RESPONSE QUALITY STANDARDS**
+
+- Be intellectually rigorous - think deeply before responding
+- Show your reasoning when helpful
+- Admit when you need more context
+- Never give generic advice - always be specific
+- Format responses for clarity (markdown, spacing, structure)
+- Be confident but not arrogant
+- Stay Gen Z authentic - no corporate speak
+
+**Remember:** You're not just a content generator. You're a strategic partner who helps creators think smarter, create better, and go viral.
+
+Now respond intelligently based on what the user actually needs.`;
 
     // Get conversation history for context
     const { data: history } = await supabaseClient
@@ -212,8 +289,10 @@ You can format your responses however works best - markdown, plain text, or stru
       for (const msg of history) {
         if (msg.role === 'user') {
           // Reconstruct user message
-          const userContent = msg.content.customTopic || 
-            `Generate ${msg.content.platform || 'TikTok'} content for ${msg.content.niche || 'general'} (${msg.content.vibe || 'engaging'} vibe, goal: ${msg.content.goal || 'engagement'})`;
+          const userContent = typeof msg.content === 'string' 
+            ? msg.content 
+            : msg.content.customTopic || 
+              `Generate ${msg.content.platform || 'TikTok'} content for ${msg.content.niche || 'general'} (${msg.content.vibe || 'engaging'} vibe, goal: ${msg.content.goal || 'engagement'})`;
           messages.push({ role: 'user', content: userContent });
         } else if (msg.role === 'assistant') {
           // Check if structured content or plain text
@@ -298,9 +377,7 @@ You can format your responses however works best - markdown, plain text, or stru
                     aiContent += content;
                     // Send chunk to client
                     controller.enqueue(
-                      encoder.encode(`data: ${JSON.stringify({ content })}
-
-`)
+                      encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
                     );
                   }
                 } catch (e) {
