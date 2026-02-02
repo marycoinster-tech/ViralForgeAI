@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Copy, Check, Flame, FileText, Hash, Eye, Lightbulb, Sparkles } from 'lucide-react';
+import { Copy, Check, Flame, FileText, Hash, Eye, Lightbulb, Sparkles, RotateCw } from 'lucide-react';
 
 interface AIMessageProps {
   content: any; // Can be structured viral content or plain text
+  onRemix?: (iteration: number) => void;
+  remixIteration?: number;
 }
 
-export function AIMessage({ content }: AIMessageProps) {
+export function AIMessage({ content, onRemix, remixIteration = 0 }: AIMessageProps) {
   const { toast } = useToast();
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
@@ -197,15 +199,27 @@ ${content.postingTip}
             </div>
           )}
 
-          {/* Copy All Button */}
-          <Button
-            onClick={copyAll}
-            variant="outline"
-            className="w-full h-10 font-semibold border-primary/20 hover:bg-primary/10"
-          >
-            <Copy className="mr-2 h-4 w-4" />
-            Copy Everything
-          </Button>
+          {/* Actions */}
+          <div className="flex gap-2">
+            <Button
+              onClick={copyAll}
+              variant="outline"
+              className="flex-1 h-10 font-semibold border-primary/20 hover:bg-primary/10"
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              Copy Everything
+            </Button>
+            {onRemix && (
+              <Button
+                onClick={() => onRemix(remixIteration + 1)}
+                variant="outline"
+                className="h-10 px-4 font-semibold border-accent/40 hover:bg-accent/10"
+                title="Remix this content to make it 30% better"
+              >
+                <RotateCw className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -276,15 +290,28 @@ ${content.postingTip}
             <div className="space-y-1">
               {formatText(textContent)}
             </div>
-            <Button
-              onClick={copyAll}
-              variant="ghost"
-              size="sm"
-              className="h-8"
-            >
-              <Copy className="mr-2 h-3.5 w-3.5" />
-              Copy
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={copyAll}
+                variant="ghost"
+                size="sm"
+                className="h-8"
+              >
+                <Copy className="mr-2 h-3.5 w-3.5" />
+                Copy
+              </Button>
+              {onRemix && (
+                <Button
+                  onClick={() => onRemix(remixIteration + 1)}
+                  variant="ghost"
+                  size="sm"
+                  className="h-8"
+                  title="Remix this content to make it 30% better"
+                >
+                  <RotateCw className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </div>

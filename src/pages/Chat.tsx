@@ -80,7 +80,14 @@ export function Chat() {
     }
   };
 
-  const handleGenerate = async (input: GeneratorInput, isRetry = false) => {
+  // Detect URLs in text
+  const detectUrl = (text: string): string | null => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const match = text.match(urlRegex);
+    return match ? match[0] : null;
+  };
+
+  const handleGenerate = async (input: GeneratorInput, isRetry = false, remixIteration = 0) => {
     setIsGenerating(true);
     setGenerationError(null);
     setLastInput(input);
@@ -100,6 +107,9 @@ export function Chat() {
       // Get user's timezone
       const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const userCountry = new Intl.Locale(navigator.language).region || 'US';
+
+      // Detect URL in custom topic
+      const contentUrl = input.customTopic ? detectUrl(input.customTopic) : null;
 
       // Create new conversation if needed
       let convId = currentConversationId;
@@ -161,6 +171,8 @@ export function Chat() {
             customTopic: input.customTopic,
             timezone: userTimezone,
             country: userCountry,
+            contentUrl: contentUrl,
+            remixIteration: remixIteration,
           }),
           signal: abortControllerRef.current.signal,
         }
@@ -361,7 +373,18 @@ export function Chat() {
                       />
                     );
                   }
-                  return <AIMessage key={message.id} content={message.content} />;
+                  return (
+                    <AIMessage 
+                      key={message.id} 
+                      content={message.content}
+                      onRemix={(iteration) => {
+                        // Remix the last user message with increased iteration
+                        if (lastInput) {
+                          handleGenerate(lastInput, false, iteration);
+                        }
+                      }}
+                    />
+                  );
                 })}
 
                 {(isGenerating || streamingContent) && (

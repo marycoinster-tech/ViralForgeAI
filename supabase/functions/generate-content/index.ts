@@ -16,6 +16,8 @@ interface GenerateRequest {
   customTopic?: string;
   timezone?: string;
   country?: string;
+  contentUrl?: string;
+  remixIteration?: number;
 }
 
 Deno.serve(async (req) => {
@@ -54,7 +56,7 @@ Deno.serve(async (req) => {
 
     // Get request body
     const body: GenerateRequest = await req.json();
-    const { conversationId, niche, vibe, goal, platform, customTopic, timezone, country } = body;
+    const { conversationId, niche, vibe, goal, platform, customTopic, timezone, country, contentUrl, remixIteration = 0 } = body;
 
     console.log(`Generating content for user ${user.id}, conversation ${conversationId}`);
 
@@ -67,7 +69,31 @@ Deno.serve(async (req) => {
 
     const username = profile?.username || 'creator';
 
-    // Build system prompt with Pidgin and timezone support
+    // Fetch content from URL if provided
+    let fetchedContent = '';
+    if (contentUrl) {
+      try {
+        console.log('Fetching content from URL:', contentUrl);
+        const urlResponse = await fetch(contentUrl);
+        const contentText = await urlResponse.text();
+        
+        // Extract meaningful text (basic HTML stripping)
+        fetchedContent = contentText
+          .replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, '')
+          .replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .substring(0, 5000); // Limit to 5000 chars
+        
+        console.log('Content fetched, length:', fetchedContent.length);
+      } catch (error) {
+        console.error('Failed to fetch URL content:', error);
+        fetchedContent = '[Failed to fetch content from URL]';
+      }
+    }
+
+    // Build system prompt with Pidgin, timezone support, and content analysis
     const systemPrompt = `You are ViralForge AI, a friendly AI assistant and expert viral content creator for Gen Z.
 
 The user's name is ${username}. Chat with them naturally like a knowledgeable friend.
@@ -117,6 +143,30 @@ Consider:
 - Target audience demographics
 - Niche-specific patterns (e.g., fitness = early morning, entertainment = evening)
 
+🔗 **CONTENT ANALYSIS & REMIX**
+When user shares a URL:
+1. **Analyze** the content - identify hooks, patterns, what makes it work
+2. **Provide feedback** - what's good, what could be better
+3. **Remix capability** - if asked, create an improved version that's 30% better
+4. **Iterative improvement** - each remix should be measurably better than the last:
+   - Iteration 1: Original analysis
+   - Iteration 2: 30% improvement (stronger hook, better pacing)
+   - Iteration 3: 60% improvement (multiple enhancements)
+   - And so on...
+
+${remixIteration > 0 ? `
+🔄 **CURRENT REMIX ITERATION: ${remixIteration}**
+This is remix iteration ${remixIteration}. Make this version ${remixIteration * 30}% better than the original.
+Focus on: ${remixIteration === 1 ? 'Hook strength, emotional impact' : remixIteration === 2 ? 'Pacing, retention tactics, pattern interrupts' : 'Advanced psychology, viral mechanics, platform-specific optimization'}
+` : ''}
+
+${fetchedContent ? `
+📄 **CONTENT FROM USER'S URL:**
+${fetchedContent}
+
+^ Analyze this content and provide feedback or remix it as requested.
+` : ''}
+
 You can format your responses however works best - markdown, plain text, or structured content. Be flexible and conversational.`;
 
     // Get conversation history for context
@@ -153,7 +203,11 @@ You can format your responses however works best - markdown, plain text, or stru
 
     // Build current user message
     let userMessage = '';
-    if (customTopic) {
+    if (contentUrl && customTopic) {
+      userMessage = customTopic; // User's analysis/remix request
+    } else if (contentUrl) {
+      userMessage = `Analyze this content from the URL I shared${remixIteration > 0 ? ` and create remix iteration ${remixIteration} (${remixIteration * 30}% better than original)` : ''}.`;
+    } else if (customTopic) {
       userMessage = customTopic;
     } else {
       userMessage = `Generate viral ${platform} content for ${niche} (${vibe} vibe, goal: ${goal})${timezone ? `. I'm in ${timezone}${country ? ` (${country})` : ''} - tell me the best time to post this.` : ''}`;

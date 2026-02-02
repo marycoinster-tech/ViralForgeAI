@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,45 @@ export function Signup() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { login } = useAuth();
+  const formStateRef = useRef({ email: '', username: '', password: '', otp: '', step: 'email' as 'email' | 'verify' });
+
+  // Persist form state to survive page focus/blur
+  useEffect(() => {
+    const savedState = localStorage.getItem('viralforge_signup_state');
+    if (savedState) {
+      try {
+        const parsed = JSON.parse(savedState);
+        setEmail(parsed.email || '');
+        setUsername(parsed.username || '');
+        setPassword(parsed.password || '');
+        setOtp(parsed.otp || '');
+        setStep(parsed.step || 'email');
+        if (parsed.resendCountdown > 0) {
+          setResendCountdown(parsed.resendCountdown);
+        }
+      } catch (e) {
+        console.error('Failed to restore signup state');
+      }
+    }
+  }, []);
+
+  // Save form state whenever it changes
+  useEffect(() => {
+    formStateRef.current = { email, username, password, otp, step };
+    localStorage.setItem('viralforge_signup_state', JSON.stringify({
+      email,
+      username,
+      password,
+      otp,
+      step,
+      resendCountdown
+    }));
+  }, [email, username, password, otp, step, resendCountdown]);
+
+  // Clear saved state on successful signup
+  const clearSavedState = () => {
+    localStorage.removeItem('viralforge_signup_state');
+  };
 
   // Countdown timer for resend
   useEffect(() => {
@@ -109,6 +148,9 @@ export function Signup() {
       if (updateError) throw updateError;
 
       if (updateData.user) {
+        // Clear saved state
+        clearSavedState();
+        
         // Login with user data (AuthContext will handle profile creation)
         login({
           id: updateData.user.id,
