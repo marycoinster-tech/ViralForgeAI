@@ -71,10 +71,37 @@ Deno.serve(async (req) => {
 
     // Fetch content from URL if provided
     let fetchedContent = '';
+    let contentSource = '';
     if (contentUrl) {
       try {
         console.log('Fetching content from URL:', contentUrl);
-        const urlResponse = await fetch(contentUrl);
+        
+        // Detect source from URL
+        const urlObj = new URL(contentUrl);
+        const domain = urlObj.hostname.replace('www.', '').toLowerCase();
+        
+        if (domain.includes('twitter.com') || domain.includes('x.com')) {
+          contentSource = 'Twitter/X';
+        } else if (domain.includes('reddit.com')) {
+          contentSource = 'Reddit';
+        } else if (domain.includes('facebook.com')) {
+          contentSource = 'Facebook';
+        } else if (domain.includes('instagram.com')) {
+          contentSource = 'Instagram';
+        } else if (domain.includes('tiktok.com')) {
+          contentSource = 'TikTok';
+        } else if (domain.includes('youtube.com') || domain.includes('youtu.be')) {
+          contentSource = 'YouTube';
+        } else {
+          contentSource = domain;
+        }
+        
+        const urlResponse = await fetch(contentUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+          }
+        });
+        
         const contentText = await urlResponse.text();
         
         // Extract meaningful text (basic HTML stripping)
@@ -86,7 +113,7 @@ Deno.serve(async (req) => {
           .trim()
           .substring(0, 5000); // Limit to 5000 chars
         
-        console.log('Content fetched, length:', fetchedContent.length);
+        console.log(`Content fetched from ${contentSource}, length:`, fetchedContent.length);
       } catch (error) {
         console.error('Failed to fetch URL content:', error);
         fetchedContent = '[Failed to fetch content from URL]';
@@ -161,7 +188,7 @@ Focus on: ${remixIteration === 1 ? 'Hook strength, emotional impact' : remixIter
 ` : ''}
 
 ${fetchedContent ? `
-📄 **CONTENT FROM USER'S URL:**
+📄 **CONTENT FROM USER'S URL (${contentSource}):**
 ${fetchedContent}
 
 ^ Analyze this content and provide feedback or remix it as requested.

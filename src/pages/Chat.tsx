@@ -80,11 +80,21 @@ export function Chat() {
     }
   };
 
-  // Detect URLs in text
-  const detectUrl = (text: string): string | null => {
+  // Detect URLs in text and extract domain info
+  const detectUrl = (text: string): { url: string; domain: string; favicon: string } | null => {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const match = text.match(urlRegex);
-    return match ? match[0] : null;
+    if (!match) return null;
+    
+    const url = match[0];
+    try {
+      const urlObj = new URL(url);
+      const domain = urlObj.hostname.replace('www.', '');
+      const favicon = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+      return { url, domain, favicon };
+    } catch {
+      return null;
+    }
   };
 
   const handleGenerate = async (input: GeneratorInput, isRetry = false, remixIteration = 0) => {
@@ -109,7 +119,8 @@ export function Chat() {
       const userCountry = new Intl.Locale(navigator.language).region || 'US';
 
       // Detect URL in custom topic
-      const contentUrl = input.customTopic ? detectUrl(input.customTopic) : null;
+      const urlInfo = input.customTopic ? detectUrl(input.customTopic) : null;
+      const contentUrl = urlInfo?.url || null;
 
       // Create new conversation if needed
       let convId = currentConversationId;
@@ -389,25 +400,36 @@ export function Chat() {
 
                 {(isGenerating || streamingContent) && (
                   <div className="space-y-4">
-                    {streamingContent ? (
-                      <div className="mb-6 animate-fade-in">
-                        <div className="max-w-3xl glass-card p-6">
-                          <div className="flex items-start gap-3 mb-4">
-                            <div className="mt-1 p-2 rounded-lg bg-gradient-to-br from-primary/20 to-accent/20">
-                              <Sparkles className="h-4 w-4 text-primary" />
+                    <div className="mb-6 animate-fade-in">
+                      <div className="max-w-3xl">
+                        <div className="flex items-start gap-3">
+                          {/* Pulsing AI Indicator */}
+                          <div className="mt-1 relative">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                              <div className="w-3 h-3 rounded-full bg-primary animate-pulse" />
                             </div>
-                            <div className="flex-1 min-w-0 space-y-3">
+                            {/* Neon glow effect */}
+                            <div className="absolute inset-0 rounded-full bg-primary/30 blur-md animate-pulse" />
+                          </div>
+                          
+                          <div className="flex-1 min-w-0 space-y-3">
+                            {streamingContent ? (
                               <div className="text-sm text-foreground/90 whitespace-pre-wrap typewriter">
                                 {streamingContent}
                                 <span className="inline-block w-1 h-4 ml-1 bg-primary animate-pulse" />
                               </div>
-                            </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                                  <span className="text-sm text-muted-foreground animate-pulse">Thinking...</span>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
-                    ) : (
-                      <LoadingIndicator />
-                    )}
+                    </div>
                     <div className="flex justify-center">
                       <Button
                         variant="outline"
