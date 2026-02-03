@@ -74,6 +74,9 @@ Deno.serve(async (req) => {
     let fetchedContent = '';
     let contentSource = '';
     let contentMetadata = '';
+    let imageUrls: string[] = [];
+    let videoInfo = '';
+    let imageAnalysis = '';
     if (contentUrl) {
       try {
         console.log('Fetching content from URL:', contentUrl);
@@ -114,18 +117,50 @@ Deno.serve(async (req) => {
         const ogTypeMatch = contentText.match(/<meta[^>]*property=["']og:type["'][^>]*content=["']([^"']+)["']/i);
         const ogImageMatch = contentText.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
         const videoMatch = contentText.match(/<meta[^>]*property=["']og:video["'][^>]*content=["']([^"']+)["']/i);
+        const videoUrlMatch = contentText.match(/<meta[^>]*property=["']og:video:url["'][^>]*content=["']([^"']+)["']/i);
+        
+        // Extract images from page (og:image + img tags)
+        if (ogImageMatch && ogImageMatch[1]) {
+          imageUrls.push(ogImageMatch[1]);
+        }
+        
+        // Extract additional images from img tags (limit to 3 for performance)
+        const imgMatches = contentText.matchAll(/<img[^>]+src=["']([^"']+)["']/gi);
+        for (const match of imgMatches) {
+          const imgUrl = match[1];
+          // Skip small images, icons, tracking pixels
+          if (!imgUrl.includes('icon') && !imgUrl.includes('logo') && !imgUrl.includes('pixel') && 
+              !imgUrl.includes('tracking') && imageUrls.length < 3) {
+            // Make relative URLs absolute
+            try {
+              const absoluteUrl = new URL(imgUrl, contentUrl).href;
+              if (!imageUrls.includes(absoluteUrl)) {
+                imageUrls.push(absoluteUrl);
+              }
+            } catch (e) {
+              // Skip invalid URLs
+            }
+          }
+          if (imageUrls.length >= 3) break;
+        }
         
         // Build metadata summary
         const title = ogTitleMatch?.[1] || titleMatch?.[1] || 'Unknown';
         const description = ogDescMatch?.[1] || descMatch?.[1] || '';
         const contentType = ogTypeMatch?.[1] || 'webpage';
-        const hasVideo = !!videoMatch || contentType.includes('video');
-        const hasImage = !!ogImageMatch;
+        const hasVideo = !!videoMatch || !!videoUrlMatch || contentType.includes('video');
+        const hasImage = imageUrls.length > 0;
         
-        contentMetadata = `**Content Type:** ${hasVideo ? 'Video' : hasImage ? 'Image/Article' : 'Article'}
+        if (hasVideo) {
+          videoInfo = `**Video URL:** ${videoMatch?.[1] || videoUrlMatch?.[1] || 'Detected but URL unavailable'}`;
+        }
+        
+        contentMetadata = `**Content Type:** ${hasVideo ? '🎥 Video Content' : hasImage ? '🖼️ Image Content' : '📄 Article'}
 **Title:** ${title}
 **Description:** ${description}
-**Source:** ${contentSource}`;
+**Source:** ${contentSource}
+${hasImage ? `**Images Found:** ${imageUrls.length} image(s)` : ''}
+${videoInfo}`;
         
         // Extract meaningful text (improved HTML stripping)
         fetchedContent = contentText
@@ -136,11 +171,69 @@ Deno.serve(async (req) => {
           .trim()
           .substring(0, 8000); // Increased to 8000 chars for better context
         
-        console.log(`Content fetched from ${contentSource}, type: ${contentType}, length:`, fetchedContent.length);
+        console.log(`Content fetched from ${contentSource}, type: ${contentType}, images: ${imageUrls.length}, length:`, fetchedContent.length);
       } catch (error) {
         console.error('Failed to fetch URL content:', error);
         fetchedContent = '[Failed to fetch content from URL - the site may be blocking automated access]';
         contentMetadata = `**Error:** Could not access content from ${contentSource}`;
+      }
+    }
+
+    // Analyze images with vision BEFORE building system prompt
+    if (imageUrls.length > 0) {
+      console.log(`Analyzing ${imageUrls.length} images with vision model...`);
+      try {
+        // Use vision-capable model to analyze images
+        const visionMessages = [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `You are a content analysis expert. Analyze these images from ${contentSource} and describe:
+
+1. **Visual Content:** What do you see? (People, objects, scenes, text overlays)
+2. **Style & Aesthetics:** Color palette, composition, editing style
+3. **Hook/Attention Grabbers:** What catches the eye immediately?
+4. **Emotional Tone:** What feeling does it convey?
+5. **Content Type:** Is this a meme, tutorial, product shot, lifestyle content, etc?
+6. **Viral Potential:** What makes this shareable or engaging?
+
+Be specific and detailed. This is for content strategy analysis.`
+              },
+              ...imageUrls.slice(0, 3).map(url => ({
+                type: 'image_url',
+                image_url: { url }
+              }))
+            ]
+          }
+        ];
+
+        const visionResponse = await fetch(`${ONSPACE_AI_BASE_URL}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${ONSPACE_AI_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'openai/gpt-4o',
+            messages: visionMessages,
+            temperature: 0.7,
+            max_tokens: 1000,
+          }),
+        });
+
+        if (visionResponse.ok) {
+          const visionData = await visionResponse.json();
+          imageAnalysis = visionData.choices?.[0]?.message?.content || '';
+          console.log('Image analysis completed, length:', imageAnalysis.length);
+        } else {
+          console.error('Vision API error:', await visionResponse.text());
+          imageAnalysis = '[Vision analysis failed - using text-only analysis]';
+        }
+      } catch (error) {
+        console.error('Image analysis error:', error);
+        imageAnalysis = '[Image analysis unavailable]';
       }
     }
 
@@ -202,8 +295,7 @@ Match the user's language style perfectly.
 
 📱 **TIMEZONE & POSTING INTELLIGENCE**
 
-${timezone && country ? `
-User is in ${timezone} (${country}).
+${timezone && country ? `User is in ${timezone} (${country}).
 
 Platform peak times for ${country}:
 - TikTok: 6-10am, 7-11pm (${timezone})
@@ -214,50 +306,58 @@ Adjust recommendations based on:
 - Day of week (weekday vs weekend)
 - Target audience demographics
 - Niche-specific patterns (fitness = morning, entertainment = evening)
-- Local cultural timing (e.g., Nigerian creators → post when US/UK awake for global reach)
-` : `
-⚠️ **User's timezone/region is unknown.**
+- Local cultural timing (e.g., Nigerian creators → post when US/UK awake for global reach)` : `⚠️ **User's timezone/region is unknown.**
 
 If they ask about posting times or want content strategy:
 1. First ask: "What region/country are you in? This helps me recommend the best posting times for your audience."
 2. Once you know → Give specific timezone-adjusted recommendations
 
-Don't guess or give generic advice without this info.
-`}
+Don't guess or give generic advice without this info.`}
 
 🔗 **DEEP LINK ANALYSIS**
 
-${fetchedContent ? `
-📊 **CONTENT ANALYSIS FROM URL:**
+${fetchedContent ? `📊 **CONTENT ANALYSIS FROM URL:**
 
 ${contentMetadata}
 
-**Raw Content Preview:**
-${fetchedContent.substring(0, 3000)}${fetchedContent.length > 3000 ? '... (truncated)' : ''}
+${imageAnalysis ? `🖼️ **VISUAL ANALYSIS (AI Vision):**
+
+${imageAnalysis}
+
+---
+` : ''}
+
+**Text Content Preview:**
+${fetchedContent.substring(0, 2000)}${fetchedContent.length > 2000 ? '... (truncated)' : ''}
 
 ---
 
 **Your Analysis Task:**
-1. Identify the content type (video, article, post)
-2. Extract key hooks, patterns, and viral mechanics
-3. Analyze what works and what doesn't
-4. Provide actionable insights
-5. If it's a video, describe the likely structure, pacing, and retention tactics
-6. Only offer to remix if user explicitly asks
 
-Be thorough, insightful, and specific. This is your chance to demonstrate true content intelligence.
+${imageAnalysis ? `✅ **You have SEEN the actual images/visuals** from this content. Use that visual understanding in your analysis.
 ` : ''}
 
-${remixIteration > 0 ? `
-🔄 **REMIX ITERATION ${remixIteration}**
+1. **Content Type Identification:** What is this? (Video, image post, article, meme, tutorial, etc.)
+2. **Hook Analysis:** What grabs attention in the first 2 seconds? (Visual or text)
+3. **Viral Mechanics:** Why would someone share this? What's the psychological trigger?
+4. **Strengths:** What works really well?
+5. **Weaknesses:** What could be improved?
+6. **Audience Fit:** Who is this for? (Age, interests, platform)
+7. **Actionable Insights:** Specific takeaways the user can apply
+
+${imageAnalysis ? `⚠️ **IMPORTANT:** Base your analysis on what you ACTUALLY SAW in the images, not assumptions. Be specific about visual elements.
+` : ''}
+
+Only offer to remix if user explicitly asks. Focus on deep, intelligent analysis first.` : ''}
+
+${remixIteration > 0 ? `🔄 **REMIX ITERATION ${remixIteration}**
 
 This is remix iteration ${remixIteration}. Create a version that's ${remixIteration * 30}% better than the original.
 
 Focus areas:
 ${remixIteration === 1 ? '- Stronger hook (curiosity, shock value)\n- Better emotional impact\n- Clearer value proposition' : ''}
 ${remixIteration === 2 ? '- Advanced pacing and retention\n- Pattern interrupts and loops\n- Viral psychology triggers' : ''}
-${remixIteration >= 3 ? '- Platform-specific optimization\n- Multi-layered engagement tactics\n- Maximum viral potential' : ''}
-` : ''}
+${remixIteration >= 3 ? '- Platform-specific optimization\n- Multi-layered engagement tactics\n- Maximum viral potential' : ''}` : ''}
 
 🎯 **RESPONSE QUALITY STANDARDS**
 
