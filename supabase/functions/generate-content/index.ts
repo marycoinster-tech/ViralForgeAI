@@ -407,6 +407,83 @@ Now respond intelligently based on what the user actually needs.`;
       }
     }
 
+    // Detect if user wants video generation
+    const videoKeywords = ['generate video', 'create video', 'make video', 'ai video', 'video script'];
+    const isVideoRequest = customTopic && videoKeywords.some(kw => customTopic.toLowerCase().includes(kw));
+
+    // If video generation requested, provide guidance
+    if (isVideoRequest) {
+      const videoGuidance = `I can help you generate AI videos! Here's how:
+
+🎬 **Video Generation Commands:**
+
+1. **Simple video:**
+   "Generate a 10-second video of a cat playing with a ball"
+
+2. **Specify style:**
+   "Create a 15-second cartoon video of a baby laughing"
+
+3. **Real human video:**
+   "Make a 12-second realistic video of a person walking in a park"
+
+**Features:**
+- Max duration: 15 seconds
+- Formats: Landscape (16:9), Portrait (9:16), Square (1:1)
+- Styles: Realistic, cartoon, anime, 3D animation
+- Uses: Sora & Veo AI models
+
+**To generate a video, use this format:**
+\`\`\`
+/video [description] [duration]s [format]
+\`\`\`
+
+Example:
+\`\`\`
+/video A cat playing with yarn in slow motion 10s portrait
+\`\`\`
+
+💡 **Pro tip:** Be specific about what you want to see - the more detail, the better the result!
+
+Ready to create your first AI video? Just use the /video command! 🚀`;
+
+      // Send response directly
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          // Stream the guidance message
+          for (const char of videoGuidance) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ content: char })}\n\n`)
+            );
+          }
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+        },
+      });
+
+      // Save messages
+      await supabaseClient.from('messages').insert({
+        conversation_id: conversationId,
+        role: 'user',
+        content: customTopic,
+      });
+
+      await supabaseClient.from('messages').insert({
+        conversation_id: conversationId,
+        role: 'assistant',
+        content: videoGuidance,
+      });
+
+      return new Response(stream, {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      });
+    }
+
     // Build current user message
     let userMessage = '';
     if (contentUrl && customTopic) {

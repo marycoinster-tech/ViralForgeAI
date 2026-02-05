@@ -14,6 +14,8 @@ import {
   Loader2,
   AlertCircle,
   Check,
+  Film,
+  Sparkles,
 } from 'lucide-react';
 import {
   Select,
@@ -189,6 +191,67 @@ export function Settings() {
                 {theme === 'light' && <Check className="ml-auto h-4 w-4" />}
               </Button>
             </div>
+          </div>
+        </div>
+
+        {/* Video Generation Section */}
+        <div className="glass-card p-6 space-y-4">
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <Film className="h-5 w-5 text-primary" />
+            AI Video Generation
+          </h2>
+
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-primary/5 border border-primary/20">
+              <Sparkles className="h-5 w-5 text-primary mt-0.5" />
+              <div className="flex-1 space-y-1">
+                <h3 className="text-sm font-semibold">Generate AI Videos in Chat</h3>
+                <p className="text-xs text-muted-foreground">
+                  Create stunning AI videos directly in your conversations using the <code className="px-1 py-0.5 rounded bg-muted text-xs">/video</code> command.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium">Features</h3>
+              <div className="grid gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-1 rounded-full bg-primary" />
+                  <span>Maximum duration: <strong>15 seconds</strong></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-1 rounded-full bg-primary" />
+                  <span>Formats: Landscape (16:9), Portrait (9:16), Square (1:1)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-1 rounded-full bg-primary" />
+                  <span>Styles: Realistic, cartoon, anime, 3D animation</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-1 rounded-full bg-primary" />
+                  <span>Models: Sora 2, Veo 3.1 (Pro & Fast)</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium">Example Commands</h3>
+              <div className="space-y-2 text-xs font-mono">
+                <div className="p-2 rounded bg-muted/50">
+                  /video A cat playing with yarn 10s landscape
+                </div>
+                <div className="p-2 rounded bg-muted/50">
+                  /video Cartoon baby laughing 12s portrait
+                </div>
+                <div className="p-2 rounded bg-muted/50">
+                  /video Realistic person walking in park 15s square
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground italic">
+              💡 Tip: Just ask the AI to generate a video for you, and it will guide you through the process!
+            </p>
           </div>
         </div>
 
