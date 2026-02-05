@@ -33,8 +33,15 @@ export function Chat() {
   const [lastInput, setLastInput] = useState<GeneratorInput | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [streamingContent, setStreamingContent] = useState<string>('');
+  const [videoGenerationStatus, setVideoGenerationStatus] = useState<{
+    active: boolean;
+    progress: number;
+    message: string;
+    predictionId?: string;
+  } | null>(null);
   const generationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const videoPollingRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load conversation messages when conversationId changes
   useEffect(() => {
@@ -97,7 +104,152 @@ export function Chat() {
     }
   };
 
+  const handleVideoGeneration = async (prompt: string, duration: number = 10, aspectRatio: '16:9' | '9:16' | '1:1' = '16:9') => {
+    setVideoGenerationStatus({
+      active: true,
+      progress: 0,
+      message: 'Starting video generation...',
+    });
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      // Step 1: Create video generation task
+      const { data: createData, error: createError } = await supabase.functions.invoke('generate-video', {
+        body: {
+          action: 'create',
+          prompt,
+          duration,
+          aspectRatio,
+        },
+      });
+
+      if (createError) {
+        if (createError instanceof FunctionsHttpError) {
+          const errorText = await createError.context.text();
+          throw new Error(`Video generation failed: ${errorText}`);
+        }
+        throw createError;
+      }
+
+      const predictionId = createData.id;
+      console.log('Video generation started:', predictionId);
+
+      setVideoGenerationStatus({
+        active: true,
+        progress: 10,
+        message: 'Generating your video... This may take 1-3 minutes.',
+        predictionId,
+      });
+
+      // Step 2: Poll for completion
+      let videoUploaded = false;
+      const pollInterval = setInterval(async () => {
+        if (videoUploaded) {
+          clearInterval(pollInterval);
+          return;
+        }
+
+        try {
+          const { data: statusData, error: statusError } = await supabase.functions.invoke('generate-video', {
+            body: {
+              action: 'check',
+              predictionId,
+            },
+          });
+
+          if (statusError) throw statusError;
+
+          console.log('Video status:', statusData.status, 'Progress:', statusData.progress);
+
+          if (statusData.status === 'succeeded') {
+            videoUploaded = true;
+            clearInterval(pollInterval);
+            
+            setVideoGenerationStatus(null);
+
+            // Add video message to chat
+            const videoMessage: Message = {
+              id: `video-${Date.now()}`,
+              role: 'assistant',
+              content: {
+                videoUrl: statusData.storage_url,
+                prompt,
+                duration,
+              },
+              created_at: new Date().toISOString(),
+            };
+            setMessages(prev => [...prev, videoMessage]);
+
+            toast({
+              title: 'Video generated!',
+              description: 'Your AI video is ready to watch',
+            });
+          } else if (statusData.status === 'failed' || statusData.status === 'canceled') {
+            videoUploaded = true;
+            clearInterval(pollInterval);
+            setVideoGenerationStatus(null);
+            throw new Error(statusData.error || 'Video generation failed');
+          } else {
+            // Still processing
+            setVideoGenerationStatus({
+              active: true,
+              progress: statusData.progress || 50,
+              message: statusData.message || 'Generating...',
+              predictionId,
+            });
+          }
+        } catch (error: any) {
+          videoUploaded = true;
+          clearInterval(pollInterval);
+          setVideoGenerationStatus(null);
+          toast({
+            title: 'Video generation failed',
+            description: error.message,
+            variant: 'destructive',
+          });
+        }
+      }, 5000); // Poll every 5 seconds
+
+      videoPollingRef.current = pollInterval;
+
+    } catch (error: any) {
+      setVideoGenerationStatus(null);
+      toast({
+        title: 'Failed to start video generation',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleGenerate = async (input: GeneratorInput, isRetry = false, remixIteration = 0) => {
+    // Detect video generation command
+    if (input.customTopic) {
+      const videoMatch = input.customTopic.match(/\/video\s+(.+?)(?:\s+(\d+)s)?(?:\s+(landscape|portrait|square|16:9|9:16|1:1))?$/i);
+      if (videoMatch) {
+        const [, prompt, durationStr, format] = videoMatch;
+        const duration = durationStr ? Math.min(parseInt(durationStr), 15) : 10;
+        const aspectRatio = 
+          format === 'portrait' || format === '9:16' ? '9:16' :
+          format === 'square' || format === '1:1' ? '1:1' : '16:9';
+        
+        // Add user message
+        const userMessage: Message = {
+          id: `temp-${Date.now()}`,
+          role: 'user',
+          content: input.customTopic,
+          created_at: new Date().toISOString(),
+        };
+        setMessages(prev => [...prev, userMessage]);
+
+        // Start video generation
+        await handleVideoGeneration(prompt, duration, aspectRatio);
+        return;
+      }
+    }
+
     setIsGenerating(true);
     setGenerationError(null);
     setLastInput(input);
@@ -286,6 +438,9 @@ export function Chat() {
       if (generationTimeoutRef.current) {
         clearTimeout(generationTimeoutRef.current);
       }
+      if (videoPollingRef.current) {
+        clearInterval(videoPollingRef.current);
+      }
     };
   }, []);
 
@@ -397,6 +552,40 @@ export function Chat() {
                     />
                   );
                 })}
+
+                {videoGenerationStatus && videoGenerationStatus.active && (
+                  <div className="mb-6 animate-fade-in">
+                    <div className="max-w-3xl glass-card p-6">
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                              <Sparkles className="h-5 w-5 text-primary" />
+                            </div>
+                            <div className="absolute inset-0 rounded-full bg-primary/30 blur-md animate-pulse" />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-sm">Generating AI Video</h3>
+                            <p className="text-xs text-muted-foreground">{videoGenerationStatus.message}</p>
+                          </div>
+                        </div>
+                        
+                        {/* Progress bar */}
+                        <div className="space-y-2">
+                          <div className="h-2 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-primary to-accent transition-all duration-500"
+                              style={{ width: `${videoGenerationStatus.progress}%` }}
+                            />
+                          </div>
+                          <p className="text-xs text-center text-muted-foreground">
+                            {videoGenerationStatus.progress}% • This may take 1-3 minutes
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {(isGenerating || streamingContent) && (
                   <div className="space-y-4">

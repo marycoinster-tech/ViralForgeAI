@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Copy, Check, Flame, FileText, Hash, Eye, Lightbulb, Sparkles, RotateCw } from 'lucide-react';
+import { VideoMessage } from './VideoMessage';
 
 interface AIMessageProps {
-  content: any; // Can be structured viral content or plain text
+  content: any; // Can be structured viral content, plain text, or video
   onRemix?: (iteration: number) => void;
   remixIteration?: number;
 }
@@ -15,6 +16,9 @@ export function AIMessage({ content, onRemix, remixIteration = 0 }: AIMessagePro
 
   // Check if content is structured viral content
   const isStructuredContent = typeof content === 'object' && content.hook && content.script;
+  
+  // Check if content is a video
+  const isVideoContent = typeof content === 'object' && content.videoUrl;
 
   const copyToClipboard = async (text: string, section: string) => {
     await navigator.clipboard.writeText(text);
@@ -94,6 +98,21 @@ ${content.postingTip}
       <p className="text-sm leading-relaxed whitespace-pre-wrap">{text}</p>
     </div>
   );
+
+  // Render video content
+  if (isVideoContent) {
+    return (
+      <div className="mb-6 animate-fade-in">
+        <div className="max-w-3xl">
+          <VideoMessage
+            videoUrl={content.videoUrl}
+            prompt={content.prompt}
+            duration={content.duration}
+          />
+        </div>
+      </div>
+    );
+  }
 
   // Render structured viral content
   if (isStructuredContent) {
