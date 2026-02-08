@@ -64,13 +64,17 @@ Deno.serve(async (req) => {
       // Create video generation task
       const { model = 'openai/sora-2', prompt, duration = 10, aspectRatio = '16:9', referenceImage } = body;
       
-      // Enforce 15 second max
-      const safeDuration = Math.min(duration, 15);
+      // Enforce 30 second max (1-30 range)
+      const safeDuration = Math.min(Math.max(1, duration), 30);
       
-      console.log(`Creating video with ${model}, duration: ${safeDuration}s`);
+      console.log(`Creating video with ${model}, duration: ${safeDuration}s, aspect ratio: ${aspectRatio}, prompt: "${prompt}"`);
 
       // Parse provider and model name
       const [provider, modelName] = model.split('/');
+      
+      if (!provider || !modelName) {
+        throw new Error(`Invalid model format: ${model}. Expected format: provider/model-name`);
+      }
       
       // Build request based on model series
       let inputParams: any;
@@ -114,9 +118,20 @@ Deno.serve(async (req) => {
       );
 
       if (!createResponse.ok) {
+        const errorStatus = createResponse.status;
         const errorText = await createResponse.text();
-        console.error('OnSpace AI error:', errorText);
-        throw new Error(`Video generation failed: ${errorText}`);
+        console.error(`OnSpace AI error (${errorStatus}):`, errorText);
+        
+        // Parse error message if JSON
+        let errorMessage = errorText;
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.error || errorJson.message || errorText;
+        } catch {
+          // Not JSON, use raw text
+        }
+        
+        throw new Error(`Video generation failed: ${errorMessage}`);
       }
 
       const prediction = await createResponse.json();
@@ -147,7 +162,10 @@ Deno.serve(async (req) => {
       );
 
       if (!statusResponse.ok) {
-        throw new Error('Failed to check video status');
+        const errorStatus = statusResponse.status;
+        const errorText = await statusResponse.text();
+        console.error(`Status check error (${errorStatus}):`, errorText);
+        throw new Error(`Failed to check video status: ${errorText}`);
       }
 
       const status = await statusResponse.json();
@@ -181,7 +199,15 @@ Deno.serve(async (req) => {
         // Download and store the video
         console.log('Video ready, downloading from:', status.output);
 
+        if (!status.output) {
+          throw new Error('No video output URL provided by the model');
+        }
+
         const videoResponse = await fetch(status.output);
+        
+        if (!videoResponse.ok) {
+          throw new Error(`Failed to download video: ${videoResponse.status} ${videoResponse.statusText}`);
+        }
         const arrayBuffer = await videoResponse.arrayBuffer();
         const videoBlob = new Blob([arrayBuffer], { type: 'video/mp4' });
 

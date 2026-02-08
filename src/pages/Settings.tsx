@@ -217,7 +217,7 @@ export function Settings() {
               <div className="grid gap-2 text-xs">
                 <div className="flex items-center gap-2">
                   <div className="w-1 h-1 rounded-full bg-primary" />
-                  <span>Maximum duration: <strong>15 seconds</strong></span>
+                  <span>Duration: <strong>1-30 seconds</strong> (customizable)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-1 h-1 rounded-full bg-primary" />
@@ -238,13 +238,10 @@ export function Settings() {
               <h3 className="text-sm font-medium">Example Commands</h3>
               <div className="space-y-2 text-xs font-mono">
                 <div className="p-2 rounded bg-muted/50">
-                  /video A cat playing with yarn 10s landscape
+                  Click the video button → Set duration (1-30s) → Describe your video
                 </div>
-                <div className="p-2 rounded bg-muted/50">
-                  /video Cartoon baby laughing 12s portrait
-                </div>
-                <div className="p-2 rounded bg-muted/50">
-                  /video Realistic person walking in park 15s square
+                <div className="p-2 rounded bg-muted/50 text-muted-foreground">
+                  Example: "A cat playing with yarn in slow motion"
                 </div>
               </div>
             </div>

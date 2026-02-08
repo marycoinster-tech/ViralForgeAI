@@ -4,6 +4,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { NICHES, VIBES, GOALS, PLATFORMS } from '@/constants/options';
 import { GeneratorInput, Niche, Vibe, Goal, Platform } from '@/types/content';
 import { Sparkles, ChevronDown, Mic, Square, Pause, Play, Video } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import {
   Select,
@@ -464,19 +465,19 @@ export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = fa
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Duration</label>
-              <Select value={videoDuration.toString()} onValueChange={(v) => setVideoDuration(parseInt(v))}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5">5s</SelectItem>
-                  <SelectItem value="10">10s</SelectItem>
-                  <SelectItem value="15">15s</SelectItem>
-                  <SelectItem value="20">20s</SelectItem>
-                  <SelectItem value="30">30s</SelectItem>
-                </SelectContent>
-              </Select>
+              <label className="text-xs font-medium text-muted-foreground">Duration (1-30s)</label>
+              <Input
+                type="number"
+                min={1}
+                max={30}
+                value={videoDuration}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value) || 1;
+                  setVideoDuration(Math.min(30, Math.max(1, val)));
+                }}
+                className="h-9 text-xs"
+                placeholder="10"
+              />
             </div>
 
             <div className="space-y-1.5">
@@ -621,7 +622,7 @@ export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = fa
         {!isRecording && (
           <p className="text-xs text-center text-muted-foreground">
             {videoMode 
-              ? `${videoStyle === 'realistic' ? '🎬' : '🎨'} ${videoDuration}s ${videoAspectRatio} video • Max 3/day` 
+              ? `${videoStyle === 'realistic' ? '🎬 Sora 2' : '🎨 Veo 3.1'} • ${videoDuration}s ${videoAspectRatio} • Max 3/day (30s max)` 
               : `Press Enter to generate • Shift + Enter for new line${isSpeechSupported ? ' • Click mic for voice input' : ''}`
             }
           </p>

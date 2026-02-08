@@ -135,8 +135,9 @@ export function Chat() {
       return;
     }
 
-    // Enforce 30 second max
-    const safeDuration = Math.min(duration, 30);
+    // Validate and enforce duration limits
+    const safeDuration = Math.min(Math.max(1, duration), 30);
+    console.log(`Starting video generation: ${safeDuration}s, ${aspectRatio}, ${style}`);
     setVideoGenerationStatus({
       active: true,
       progress: 0,
@@ -160,6 +161,8 @@ export function Chat() {
       const model = style === 'cartoon' ? 'google/veo-3.1-fast' : 'openai/sora-2';
 
       // Step 1: Create video generation task
+      console.log('Calling generate-video with:', { model, prompt, duration: safeDuration, aspectRatio });
+      
       const { data: createData, error: createError } = await supabase.functions.invoke('generate-video', {
         body: {
           action: 'create',
@@ -171,11 +174,23 @@ export function Chat() {
       });
 
       if (createError) {
+        console.error('Video creation error:', createError);
+        let errorMessage = 'Failed to start video generation';
+        
         if (createError instanceof FunctionsHttpError) {
-          const errorText = await createError.context.text();
-          throw new Error(`Video generation failed: ${errorText}`);
+          try {
+            const statusCode = createError.context?.status ?? 500;
+            const textContent = await createError.context?.text();
+            errorMessage = `[Code: ${statusCode}] ${textContent || createError.message || 'Unknown error'}`;
+            console.error('Detailed error:', errorMessage);
+          } catch {
+            errorMessage = createError.message || 'Failed to read response';
+          }
+        } else {
+          errorMessage = createError.message || 'Unknown error occurred';
         }
-        throw createError;
+        
+        throw new Error(errorMessage);
       }
 
       const predictionId = createData.id;
@@ -204,7 +219,21 @@ export function Chat() {
             },
           });
 
-          if (statusError) throw statusError;
+          if (statusError) {
+            console.error('Video status check error:', statusError);
+            let errorMessage = 'Failed to check video status';
+            
+            if (statusError instanceof FunctionsHttpError) {
+              try {
+                const textContent = await statusError.context?.text();
+                errorMessage = textContent || statusError.message || 'Unknown error';
+              } catch {
+                errorMessage = statusError.message || 'Failed to read response';
+              }
+            }
+            
+            throw new Error(errorMessage);
+          }
 
           console.log('Video status:', statusData.status, 'Progress:', statusData.progress);
 
@@ -263,9 +292,20 @@ export function Chat() {
       videoPollingRef.current = pollInterval;
 
     } catch (error: any) {
+      console.error('Video generation error:', error);
       setVideoGenerationStatus(null);
+      
+      // Add error message to chat
+      const errorMessage: Message = {
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        content: `❌ Video generation failed: ${error.message}\n\nPlease try again or contact support if the issue persists.`,
+        created_at: new Date().toISOString(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      
       toast({
-        title: 'Failed to start video generation',
+        title: 'Video generation failed',
         description: error.message,
         variant: 'destructive',
       });
