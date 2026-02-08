@@ -31,7 +31,7 @@ export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = fa
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('tiktok');
   const [showOptions, setShowOptions] = useState(false);
   const [videoStyle, setVideoStyle] = useState<'realistic' | 'cartoon'>('realistic');
-  const [videoDuration, setVideoDuration] = useState(10);
+  const [videoDuration, setVideoDuration] = useState(8);
   const [videoAspectRatio, setVideoAspectRatio] = useState<'16:9' | '9:16' | '1:1'>('9:16');
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -465,18 +465,22 @@ export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = fa
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Duration (1-30s)</label>
+              <label className="text-xs font-medium text-muted-foreground">
+                Duration {videoStyle === 'realistic' ? '(4/8/12s)' : '(4-28s)'}
+              </label>
               <Input
                 type="number"
-                min={1}
-                max={30}
+                min={4}
+                max={videoStyle === 'realistic' ? 12 : 28}
+                step={4}
                 value={videoDuration}
                 onChange={(e) => {
-                  const val = parseInt(e.target.value) || 1;
-                  setVideoDuration(Math.min(30, Math.max(1, val)));
+                  const val = parseInt(e.target.value) || 4;
+                  const maxDur = videoStyle === 'realistic' ? 12 : 28;
+                  setVideoDuration(Math.min(maxDur, Math.max(4, val)));
                 }}
                 className="h-9 text-xs"
-                placeholder="10"
+                placeholder="8"
               />
             </div>
 
@@ -622,7 +626,7 @@ export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = fa
         {!isRecording && (
           <p className="text-xs text-center text-muted-foreground">
             {videoMode 
-              ? `${videoStyle === 'realistic' ? '🎬 Sora 2' : '🎨 Veo 3.1'} • ${videoDuration}s ${videoAspectRatio} • Max 3/day (30s max)` 
+              ? `${videoStyle === 'realistic' ? '🎬 Sora 2 (4/8/12s only)' : '🎨 Veo 3.1 (4-28s)'} • ${videoDuration}s ${videoAspectRatio} • Max 3/day` 
               : `Press Enter to generate • Shift + Enter for new line${isSpeechSupported ? ' • Click mic for voice input' : ''}`
             }
           </p>

@@ -64,17 +64,37 @@ Deno.serve(async (req) => {
       // Create video generation task
       const { model = 'openai/sora-2', prompt, duration = 10, aspectRatio = '16:9', referenceImage } = body;
       
-      // Enforce 30 second max (1-30 range)
-      const safeDuration = Math.min(Math.max(1, duration), 30);
-      
-      console.log(`Creating video with ${model}, duration: ${safeDuration}s, aspect ratio: ${aspectRatio}, prompt: "${prompt}"`);
-
-      // Parse provider and model name
+      // Parse provider and model name first
       const [provider, modelName] = model.split('/');
       
       if (!provider || !modelName) {
         throw new Error(`Invalid model format: ${model}. Expected format: provider/model-name`);
       }
+
+      // Map duration to model-specific valid values
+      let safeDuration: number;
+      
+      if (provider === 'openai') {
+        // Sora only accepts: 4, 8, or 12 seconds
+        if (duration <= 6) {
+          safeDuration = 4;
+        } else if (duration <= 10) {
+          safeDuration = 8;
+        } else {
+          safeDuration = 12;
+        }
+      } else if (provider === 'google') {
+        // Veo supports: 4, 8, 12, 16, 20, 24, 28 seconds
+        const veoValidDurations = [4, 8, 12, 16, 20, 24, 28];
+        safeDuration = veoValidDurations.reduce((prev, curr) => 
+          Math.abs(curr - duration) < Math.abs(prev - duration) ? curr : prev
+        );
+      } else {
+        // Default fallback
+        safeDuration = Math.min(Math.max(4, duration), 12);
+      }
+      
+      console.log(`Creating video with ${model}, requested: ${duration}s, using: ${safeDuration}s, aspect ratio: ${aspectRatio}, prompt: "${prompt}"`);
       
       // Build request based on model series
       let inputParams: any;

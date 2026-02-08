@@ -217,7 +217,7 @@ export function Settings() {
               <div className="grid gap-2 text-xs">
                 <div className="flex items-center gap-2">
                   <div className="w-1 h-1 rounded-full bg-primary" />
-                  <span>Duration: <strong>1-30 seconds</strong> (customizable)</span>
+                  <span>Duration: <strong>Sora 2: 4/8/12s • Veo 3.1: 4-28s</strong></span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-1 h-1 rounded-full bg-primary" />
@@ -225,11 +225,11 @@ export function Settings() {
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-1 h-1 rounded-full bg-primary" />
-                  <span>Styles: Realistic, cartoon, anime, 3D animation</span>
+                  <span>Styles: Realistic (Sora 2), Cartoon (Veo 3.1)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-1 h-1 rounded-full bg-primary" />
-                  <span>Models: Sora 2, Veo 3.1 (Pro & Fast)</span>
+                  <span>Limit: 3 videos per day</span>
                 </div>
               </div>
             </div>

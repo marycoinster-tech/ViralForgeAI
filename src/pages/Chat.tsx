@@ -135,13 +135,28 @@ export function Chat() {
       return;
     }
 
-    // Validate and enforce duration limits
-    const safeDuration = Math.min(Math.max(1, duration), 30);
-    console.log(`Starting video generation: ${safeDuration}s, ${aspectRatio}, ${style}`);
+    // Model-specific duration validation
+    const isRealistic = style === 'realistic';
+    let safeDuration = duration;
+    
+    if (isRealistic) {
+      // Sora only accepts 4, 8, 12
+      if (duration <= 6) safeDuration = 4;
+      else if (duration <= 10) safeDuration = 8;
+      else safeDuration = 12;
+    } else {
+      // Veo accepts 4, 8, 12, 16, 20, 24, 28
+      const veoValid = [4, 8, 12, 16, 20, 24, 28];
+      safeDuration = veoValid.reduce((prev, curr) => 
+        Math.abs(curr - duration) < Math.abs(prev - duration) ? curr : prev
+      );
+    }
+    
+    console.log(`Starting video generation: requested ${duration}s, using ${safeDuration}s, ${aspectRatio}, ${style}`);
     setVideoGenerationStatus({
       active: true,
       progress: 0,
-      message: 'Starting video generation...',
+      message: `Starting ${isRealistic ? 'Sora 2' : 'Veo 3.1'} video (${safeDuration}s)...`,
     });
 
     // Add user message to UI
