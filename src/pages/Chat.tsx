@@ -39,6 +39,8 @@ export function Chat() {
     message: string;
     predictionId?: string;
   } | null>(null);
+  const [videoMode, setVideoMode] = useState(false);
+  const [dailyVideoCount, setDailyVideoCount] = useState(0);
   const generationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const videoPollingRef = useRef<NodeJS.Timeout | null>(null);
@@ -57,6 +59,24 @@ export function Chat() {
       setCurrentConversationId(null);
     }
   }, [conversationId]); // This will trigger whenever the URL param changes
+
+  // Check daily video limit on mount
+  useEffect(() => {
+    checkDailyVideoLimit();
+  }, []);
+
+  const checkDailyVideoLimit = async () => {
+    try {
+      const { data, error } = await supabase.rpc('check_daily_video_limit', {
+        user_uuid: user!.id,
+      });
+
+      if (error) throw error;
+      setDailyVideoCount(data || 0);
+    } catch (error: any) {
+      console.error('Failed to check video limit:', error);
+    }
+  };
 
   const loadConversation = async (id: string) => {
     if (isLoadingHistory) return; // Prevent duplicate loads
@@ -104,23 +124,48 @@ export function Chat() {
     }
   };
 
-  const handleVideoGeneration = async (prompt: string, duration: number = 10, aspectRatio: '16:9' | '9:16' | '1:1' = '16:9') => {
+  const handleVideoGeneration = async (prompt: string, duration: number = 10, aspectRatio: '16:9' | '9:16' | '1:1' = '16:9', style: string = 'realistic') => {
+    // Check daily limit
+    if (dailyVideoCount >= 3) {
+      toast({
+        title: 'Daily limit reached',
+        description: 'You can generate up to 3 videos per day. Try again tomorrow!',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Enforce 30 second max
+    const safeDuration = Math.min(duration, 30);
     setVideoGenerationStatus({
       active: true,
       progress: 0,
       message: 'Starting video generation...',
     });
 
+    // Add user message to UI
+    const userMessage: Message = {
+      id: `temp-user-${Date.now()}`,
+      role: 'user',
+      content: `Generate ${safeDuration}s ${style} video: "${prompt}" (${aspectRatio})`,
+      created_at: new Date().toISOString(),
+    };
+    setMessages(prev => [...prev, userMessage]);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
+
+      // Select model based on style
+      const model = style === 'cartoon' ? 'google/veo-3.1-fast' : 'openai/sora-2';
 
       // Step 1: Create video generation task
       const { data: createData, error: createError } = await supabase.functions.invoke('generate-video', {
         body: {
           action: 'create',
+          model,
           prompt,
-          duration,
+          duration: safeDuration,
           aspectRatio,
         },
       });
@@ -176,11 +221,14 @@ export function Chat() {
               content: {
                 videoUrl: statusData.storage_url,
                 prompt,
-                duration,
+                duration: safeDuration,
               },
               created_at: new Date().toISOString(),
             };
             setMessages(prev => [...prev, videoMessage]);
+
+            // Update daily count
+            setDailyVideoCount(prev => prev + 1);
 
             toast({
               title: 'Video generated!',
@@ -225,31 +273,6 @@ export function Chat() {
   };
 
   const handleGenerate = async (input: GeneratorInput, isRetry = false, remixIteration = 0) => {
-    // Detect video generation command
-    if (input.customTopic) {
-      const videoMatch = input.customTopic.match(/\/video\s+(.+?)(?:\s+(\d+)s)?(?:\s+(landscape|portrait|square|16:9|9:16|1:1))?$/i);
-      if (videoMatch) {
-        const [, prompt, durationStr, format] = videoMatch;
-        const duration = durationStr ? Math.min(parseInt(durationStr), 15) : 10;
-        const aspectRatio = 
-          format === 'portrait' || format === '9:16' ? '9:16' :
-          format === 'square' || format === '1:1' ? '1:1' : '16:9';
-        
-        // Add user message
-        const userMessage: Message = {
-          id: `temp-${Date.now()}`,
-          role: 'user',
-          content: input.customTopic,
-          created_at: new Date().toISOString(),
-        };
-        setMessages(prev => [...prev, userMessage]);
-
-        // Start video generation
-        await handleVideoGeneration(prompt, duration, aspectRatio);
-        return;
-      }
-    }
-
     setIsGenerating(true);
     setGenerationError(null);
     setLastInput(input);
@@ -665,7 +688,18 @@ export function Chat() {
         </div>
 
         {/* Input Bar */}
-        <InputBar onGenerate={handleGenerate} disabled={isGenerating} />
+        <InputBar 
+          onGenerate={handleGenerate} 
+          onVideoGenerate={(params) => handleVideoGeneration(
+            params.prompt,
+            params.duration,
+            params.aspectRatio,
+            params.style
+          )}
+          disabled={isGenerating || (videoGenerationStatus?.active || false)}
+          videoMode={videoMode}
+          onVideoModeToggle={() => setVideoMode(!videoMode)}
+        />
       </div>
     </AppLayout>
   );

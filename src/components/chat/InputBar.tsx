@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { NICHES, VIBES, GOALS, PLATFORMS } from '@/constants/options';
 import { GeneratorInput, Niche, Vibe, Goal, Platform } from '@/types/content';
-import { Sparkles, ChevronDown, Mic, Square, Pause, Play } from 'lucide-react';
+import { Sparkles, ChevronDown, Mic, Square, Pause, Play, Video } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   Select,
@@ -15,10 +15,13 @@ import {
 
 interface InputBarProps {
   onGenerate: (input: GeneratorInput) => void;
+  onVideoGenerate?: (params: { prompt: string; duration: number; aspectRatio: '16:9' | '9:16' | '1:1'; style: string }) => void;
   disabled?: boolean;
+  videoMode?: boolean;
+  onVideoModeToggle?: () => void;
 }
 
-export function InputBar({ onGenerate, disabled }: InputBarProps) {
+export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = false, onVideoModeToggle }: InputBarProps) {
   const { toast } = useToast();
   const [customTopic, setCustomTopic] = useState('');
   const [selectedNiche, setSelectedNiche] = useState<Niche>('anime');
@@ -26,6 +29,9 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
   const [selectedGoal, setSelectedGoal] = useState<Goal>('followers');
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('tiktok');
   const [showOptions, setShowOptions] = useState(false);
+  const [videoStyle, setVideoStyle] = useState<'realistic' | 'cartoon'>('realistic');
+  const [videoDuration, setVideoDuration] = useState(10);
+  const [videoAspectRatio, setVideoAspectRatio] = useState<'16:9' | '9:16' | '1:1'>('9:16');
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
@@ -41,15 +47,26 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
   const handleSubmit = () => {
     if (!customTopic.trim() && !showOptions) return;
 
-    onGenerate({
-      niche: selectedNiche,
-      vibe: selectedVibe,
-      goal: selectedGoal,
-      platform: selectedPlatform,
-      customTopic: customTopic.trim() || undefined,
-    });
-
-    setCustomTopic('');
+    if (videoMode && onVideoGenerate) {
+      // Video generation mode
+      onVideoGenerate({
+        prompt: customTopic.trim(),
+        duration: videoDuration,
+        aspectRatio: videoAspectRatio,
+        style: videoStyle,
+      });
+      setCustomTopic('');
+    } else {
+      // Regular chat mode
+      onGenerate({
+        niche: selectedNiche,
+        vibe: selectedVibe,
+        goal: selectedGoal,
+        platform: selectedPlatform,
+        customTopic: customTopic.trim() || undefined,
+      });
+      setCustomTopic('');
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -430,11 +447,59 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
           </div>
         )}
 
+        {/* Video Options (when video mode is active) */}
+        {videoMode && (
+          <div className="grid grid-cols-3 gap-2 p-3 glass rounded-xl animate-fade-in">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Style</label>
+              <Select value={videoStyle} onValueChange={(v) => setVideoStyle(v as 'realistic' | 'cartoon')}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="realistic">🎬 Realistic</SelectItem>
+                  <SelectItem value="cartoon">🎨 Cartoon</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Duration</label>
+              <Select value={videoDuration.toString()} onValueChange={(v) => setVideoDuration(parseInt(v))}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5s</SelectItem>
+                  <SelectItem value="10">10s</SelectItem>
+                  <SelectItem value="15">15s</SelectItem>
+                  <SelectItem value="20">20s</SelectItem>
+                  <SelectItem value="30">30s</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Format</label>
+              <Select value={videoAspectRatio} onValueChange={(v) => setVideoAspectRatio(v as '16:9' | '9:16' | '1:1')}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="16:9">📺 Landscape</SelectItem>
+                  <SelectItem value="9:16">📱 Portrait</SelectItem>
+                  <SelectItem value="1:1">⬜ Square</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
+
         {/* Input Area */}
         <div className="flex gap-2 items-end">
           <div className="flex-1 relative">
             <Textarea
-              placeholder="Drop a topic, vibe, or niche... (or just hit generate)"
+              placeholder={videoMode ? "Describe your video... (e.g., 'A cat playing with yarn')" : "Drop a topic, vibe, or niche... (or just hit generate)"}
               value={customTopic}
               onChange={(e) => setCustomTopic(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -443,7 +508,7 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
               rows={1}
             />
             {/* Voice Button Inside Textarea */}
-            {isSpeechSupported && (
+            {isSpeechSupported && !videoMode && (
               <Button
                 type="button"
                 variant="ghost"
@@ -463,13 +528,28 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
               </Button>
             )}
           </div>
+          
+          {/* Video Mode Toggle */}
+          {onVideoModeToggle && (
+            <Button
+              type="button"
+              variant={videoMode ? 'default' : 'outline'}
+              size="lg"
+              onClick={onVideoModeToggle}
+              disabled={disabled || isRecording}
+              className="px-4 h-14 rounded-2xl shrink-0"
+              title="Toggle AI video generation mode"
+            >
+              <Video className="h-5 w-5" />
+            </Button>
+          )}
           <Button
             onClick={handleSubmit}
-            disabled={disabled || isRecording}
+            disabled={disabled || isRecording || (videoMode && !customTopic.trim())}
             size="lg"
             className="px-6 h-14 rounded-2xl shrink-0"
           >
-            <Sparkles className="h-5 w-5" />
+            {videoMode ? <Video className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
           </Button>
         </div>
 
@@ -540,7 +620,10 @@ export function InputBar({ onGenerate, disabled }: InputBarProps) {
 
         {!isRecording && (
           <p className="text-xs text-center text-muted-foreground">
-            Press Enter to generate • Shift + Enter for new line{isSpeechSupported ? ' • Click mic for voice input' : ''}
+            {videoMode 
+              ? `${videoStyle === 'realistic' ? '🎬' : '🎨'} ${videoDuration}s ${videoAspectRatio} video • Max 3/day` 
+              : `Press Enter to generate • Shift + Enter for new line${isSpeechSupported ? ' • Click mic for voice input' : ''}`
+            }
           </p>
         )}
       </div>
