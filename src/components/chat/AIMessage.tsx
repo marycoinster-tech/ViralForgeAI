@@ -15,10 +15,10 @@ export function AIMessage({ content, onRemix, remixIteration = 0 }: AIMessagePro
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
   // Check if content is structured viral content
-  const isStructuredContent = typeof content === 'object' && content.hook && content.script;
+  const isStructuredContent = typeof content === 'object' && content !== null && 'hook' in content && 'script' in content;
   
-  // Check if content is a video
-  const isVideoContent = typeof content === 'object' && content.videoUrl;
+  // Check if content is a video (check for videoUrl property)
+  const isVideoContent = typeof content === 'object' && content !== null && 'videoUrl' in content;
 
   const copyToClipboard = async (text: string, section: string) => {
     await navigator.clipboard.writeText(text);

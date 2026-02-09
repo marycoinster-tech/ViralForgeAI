@@ -159,11 +159,56 @@ export function Chat() {
       message: `Starting ${isRealistic ? 'Sora 2' : 'Veo 3.1'} video (${safeDuration}s)...`,
     });
 
+    // Create new conversation if needed
+    let convId = currentConversationId;
+    
+    if (!convId) {
+      const { data: newConv, error: convError } = await supabase
+        .from('conversations')
+        .insert({
+          user_id: user!.id,
+          title: `Video: ${prompt.slice(0, 30)}...`,
+        })
+        .select()
+        .single();
+
+      if (convError) {
+        console.error('Conversation creation error:', convError);
+        toast({
+          title: 'Failed to create conversation',
+          description: convError.message,
+          variant: 'destructive',
+        });
+        return;
+      }
+      convId = newConv.id;
+      setCurrentConversationId(convId);
+
+      // Update URL to include conversation ID
+      navigate(`/app/${convId}`, { replace: true });
+    }
+
+    // Save user message to database
+    const userMessageContent = `Generate ${safeDuration}s ${style} video: "${prompt}" (${aspectRatio})`;
+    const { data: savedUserMessage, error: userMsgError } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: convId,
+        role: 'user',
+        content: userMessageContent,
+      })
+      .select()
+      .single();
+
+    if (userMsgError) {
+      console.error('Failed to save user message:', userMsgError);
+    }
+
     // Add user message to UI
-    const userMessage: Message = {
+    const userMessage: Message = savedUserMessage || {
       id: `temp-user-${Date.now()}`,
       role: 'user',
-      content: `Generate ${safeDuration}s ${style} video: "${prompt}" (${aspectRatio})`,
+      content: userMessageContent,
       created_at: new Date().toISOString(),
     };
     setMessages(prev => [...prev, userMessage]);
@@ -258,15 +303,32 @@ export function Chat() {
             
             setVideoGenerationStatus(null);
 
-            // Add video message to chat
-            const videoMessage: Message = {
+            // Save video message to database
+            const videoContent = {
+              videoUrl: statusData.storage_url,
+              prompt,
+              duration: safeDuration,
+            };
+
+            const { data: savedVideoMessage, error: videoMsgError } = await supabase
+              .from('messages')
+              .insert({
+                conversation_id: convId,
+                role: 'assistant',
+                content: videoContent,
+              })
+              .select()
+              .single();
+
+            if (videoMsgError) {
+              console.error('Failed to save video message:', videoMsgError);
+            }
+
+            // Add video message to UI
+            const videoMessage: Message = savedVideoMessage || {
               id: `video-${Date.now()}`,
               role: 'assistant',
-              content: {
-                videoUrl: statusData.storage_url,
-                prompt,
-                duration: safeDuration,
-              },
+              content: videoContent,
               created_at: new Date().toISOString(),
             };
             setMessages(prev => [...prev, videoMessage]);
@@ -276,7 +338,7 @@ export function Chat() {
 
             toast({
               title: 'Video generated!',
-              description: 'Your AI video is ready to watch',
+              description: 'Your AI video is ready to watch and saved to your chat history',
             });
           } else if (statusData.status === 'failed' || statusData.status === 'canceled') {
             videoUploaded = true;
