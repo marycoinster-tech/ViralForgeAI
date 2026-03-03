@@ -275,12 +275,40 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
           </div>
         )}
 
-        <div className="border-t border-border/40 pt-4">
+        <div className="border-t border-border/40 pt-4 space-y-3">
           <div className="flex items-start gap-2 text-xs text-muted-foreground">
             <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold mb-1">Secure payment powered by Paystack</p>
               <p>Each AI video costs 10 credits. Credits never expire. Buy more anytime!</p>
+            </div>
+          </div>
+          
+          {/* Payment Methods */}
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border/40">
+            <p className="text-xs font-medium text-muted-foreground">Accepted payments:</p>
+            <div className="flex items-center gap-2">
+              <div className="px-2.5 py-1 rounded bg-background border border-border/40 text-xs font-semibold">
+                💳 Card
+              </div>
+              <div className="px-2.5 py-1 rounded bg-background border border-border/40 text-xs font-semibold">
+                🏦 Bank
+              </div>
+              <div className="px-2.5 py-1 rounded bg-background border border-border/40 text-xs font-semibold">
+                 Apple Pay
+              </div>
+            </div>
+          </div>
+          
+          {/* Apple Pay Notice */}
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
+            <span className="text-lg shrink-0"></span>
+            <div className="text-xs">
+              <p className="font-semibold text-foreground mb-1">Apple Pay Available</p>
+              <p className="text-muted-foreground leading-relaxed">
+                Apple Pay appears automatically on iPhone, iPad & Mac (Safari). 
+                Enable it in your Paystack Dashboard → Payment Channels.
+              </p>
             </div>
           </div>
         </div>
