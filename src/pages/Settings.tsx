@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -16,6 +16,8 @@ import {
   Check,
   Film,
   Sparkles,
+  Receipt,
+  ShoppingCart,
 } from 'lucide-react';
 import {
   Select,
@@ -35,6 +37,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { BuyCreditsModal } from '@/components/features/BuyCreditsModal';
 
 export function Settings() {
   const navigate = useNavigate();
@@ -45,6 +48,63 @@ export function Settings() {
   const [language, setLanguage] = useState('en');
   const [loading, setLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [credits, setCredits] = useState(0);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [showBuyCredits, setShowBuyCredits] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      loadCredits();
+      loadTransactions();
+    }
+  }, [user]);
+
+  const loadCredits = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('credits_remaining')
+        .eq('id', user!.id)
+        .single();
+
+      if (error) throw error;
+      setCredits(data?.credits_remaining || 0);
+    } catch (error: any) {
+      console.error('Failed to load credits:', error);
+    }
+  };
+
+  const loadTransactions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*, credit_packs(*)')
+        .eq('payment_status', 'success')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+      setTransactions(data || []);
+    } catch (error: any) {
+      console.error('Failed to load transactions:', error);
+    }
+  };
+
+  const formatPrice = (cents: number, currency: string) => {
+    const amount = cents / 100;
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+    }).format(amount);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
 
   const handleThemeChange = async (newTheme: 'light' | 'dark') => {
     setLoading(true);
@@ -156,6 +216,71 @@ export function Settings() {
 
       {/* Content */}
       <div className="max-w-4xl mx-auto p-4 space-y-6">
+        {/* Credits & Payments Section */}
+        <div className="glass-card p-6 space-y-4">
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <ShoppingCart className="h-5 w-5 text-primary" />
+            Credits & Payments
+          </h2>
+
+          <div className="space-y-4">
+            {/* Current Balance */}
+            <div className="p-4 rounded-lg bg-gradient-to-br from-primary/10 to-accent/10 border border-primary/20">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Available Credits</p>
+                  <p className="text-4xl font-black text-gradient">{credits}</p>
+                </div>
+                <Sparkles className="h-12 w-12 text-primary opacity-20" />
+              </div>
+              <Button
+                onClick={() => setShowBuyCredits(true)}
+                className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90"
+              >
+                <ShoppingCart className="mr-2 h-4 w-4" />
+                Buy More Credits
+              </Button>
+            </div>
+
+            {/* Transaction History */}
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium flex items-center gap-2">
+                <Receipt className="h-4 w-4 text-primary" />
+                Recent Purchases
+              </h3>
+              {transactions.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  No purchases yet. Buy credits to start creating AI videos!
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {transactions.map((tx) => (
+                    <div
+                      key={tx.id}
+                      className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/40"
+                    >
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold">
+                          {tx.credit_packs?.name || 'Credit Pack'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(tx.created_at)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold">+{tx.credits_purchased}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatPrice(tx.amount_cents, tx.currency)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Appearance Section */}
         <div className="glass-card p-6 space-y-4">
           <h2 className="text-lg font-bold flex items-center gap-2">
@@ -207,14 +332,18 @@ export function Settings() {
               <div className="flex-1 space-y-1">
                 <h3 className="text-sm font-semibold">Generate AI Videos in Chat</h3>
                 <p className="text-xs text-muted-foreground">
-                  Create stunning AI videos directly in your conversations using the <code className="px-1 py-0.5 rounded bg-muted text-xs">/video</code> command.
+                  Create stunning AI videos directly in your conversations. Click the video button in the chat input!
                 </p>
               </div>
             </div>
 
             <div className="space-y-3">
-              <h3 className="text-sm font-medium">Features</h3>
+              <h3 className="text-sm font-medium">Pricing & Limits</h3>
               <div className="grid gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-1 rounded-full bg-primary" />
+                  <span>Cost: <strong>10 credits per video</strong></span>
+                </div>
                 <div className="flex items-center gap-2">
                   <div className="w-1 h-1 rounded-full bg-primary" />
                   <span>Duration: <strong>Sora 2: 4/8/12s • Veo 3.1: 4-28s</strong></span>
@@ -229,25 +358,13 @@ export function Settings() {
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-1 h-1 rounded-full bg-primary" />
-                  <span>Limit: 3 videos per day</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium">Example Commands</h3>
-              <div className="space-y-2 text-xs font-mono">
-                <div className="p-2 rounded bg-muted/50">
-                  Click the video button → Set duration (1-30s) → Describe your video
-                </div>
-                <div className="p-2 rounded bg-muted/50 text-muted-foreground">
-                  Example: "A cat playing with yarn in slow motion"
+                  <span>Daily Limit: 3 videos per day</span>
                 </div>
               </div>
             </div>
 
             <p className="text-xs text-muted-foreground italic">
-              💡 Tip: Just ask the AI to generate a video for you, and it will guide you through the process!
+              💡 Tip: Toggle video mode in chat, set your preferences, and describe your video. The AI handles the rest!
             </p>
           </div>
         </div>
@@ -383,6 +500,16 @@ export function Settings() {
           </div>
         </div>
       </div>
+
+      {/* Buy Credits Modal */}
+      <BuyCreditsModal
+        open={showBuyCredits}
+        onOpenChange={setShowBuyCredits}
+        onSuccess={() => {
+          loadCredits();
+          loadTransactions();
+        }}
+      />
     </div>
   );
 }

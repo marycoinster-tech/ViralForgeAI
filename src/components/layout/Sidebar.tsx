@@ -11,9 +11,11 @@ import {
   Settings as SettingsIcon,
   Sparkles,
   User,
-  Trash2
+  Trash2,
+  ShoppingCart
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { BuyCreditsModal } from '@/components/features/BuyCreditsModal';
 
 interface Conversation {
   id: string;
@@ -33,10 +35,13 @@ export function Sidebar({ onClose }: SidebarProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [credits, setCredits] = useState(0);
+  const [showBuyCredits, setShowBuyCredits] = useState(false);
 
   useEffect(() => {
     if (user) {
       loadConversations();
+      loadCredits();
     }
   }, [user]);
 
@@ -54,6 +59,21 @@ export function Sidebar({ onClose }: SidebarProps) {
       console.error('Failed to load conversations:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCredits = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('credits_remaining')
+        .eq('id', user!.id)
+        .single();
+
+      if (error) throw error;
+      setCredits(data?.credits_remaining || 0);
+    } catch (error) {
+      console.error('Failed to load credits:', error);
     }
   };
 
@@ -185,17 +205,29 @@ export function Sidebar({ onClose }: SidebarProps) {
 
       {/* User Section */}
       <div className="p-4 border-t border-border/40 space-y-2">
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/10">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <User className="h-4 w-4 text-primary flex-shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold truncate">{user?.username}</p>
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Sparkles className="h-3 w-3" />
-                {user?.credits} credits
-              </p>
+        {/* Credits Display */}
+        <div className="p-3 rounded-lg bg-gradient-to-br from-primary/10 to-accent/10 border border-primary/20">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <span className="text-xs font-medium text-muted-foreground">Credits</span>
             </div>
+            <span className="text-2xl font-black text-gradient">{credits}</span>
           </div>
+          <Button
+            onClick={() => setShowBuyCredits(true)}
+            size="sm"
+            className="w-full h-8 bg-gradient-to-r from-primary to-accent hover:opacity-90"
+          >
+            <ShoppingCart className="mr-2 h-3.5 w-3.5" />
+            Buy Credits
+          </Button>
+        </div>
+
+        {/* User Info */}
+        <div className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors">
+          <User className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm truncate flex-1">{user?.username}</span>
         </div>
 
         <div className="flex gap-2">
@@ -220,6 +252,13 @@ export function Sidebar({ onClose }: SidebarProps) {
           </Button>
         </div>
       </div>
+
+      {/* Buy Credits Modal */}
+      <BuyCreditsModal
+        open={showBuyCredits}
+        onOpenChange={setShowBuyCredits}
+        onSuccess={loadCredits}
+      />
     </div>
   );
 }

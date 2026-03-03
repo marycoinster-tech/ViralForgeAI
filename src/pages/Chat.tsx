@@ -41,6 +41,7 @@ export function Chat() {
   } | null>(null);
   const [videoMode, setVideoMode] = useState(false);
   const [dailyVideoCount, setDailyVideoCount] = useState(0);
+  const [userCredits, setUserCredits] = useState(0);
   const generationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const videoPollingRef = useRef<NodeJS.Timeout | null>(null);
@@ -60,9 +61,10 @@ export function Chat() {
     }
   }, [conversationId]); // This will trigger whenever the URL param changes
 
-  // Check daily video limit on mount
+  // Check daily video limit and load credits on mount
   useEffect(() => {
     checkDailyVideoLimit();
+    loadUserCredits();
   }, []);
 
   const checkDailyVideoLimit = async () => {
@@ -75,6 +77,21 @@ export function Chat() {
       setDailyVideoCount(data || 0);
     } catch (error: any) {
       console.error('Failed to check video limit:', error);
+    }
+  };
+
+  const loadUserCredits = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('credits_remaining')
+        .eq('id', user!.id)
+        .single();
+
+      if (error) throw error;
+      setUserCredits(data?.credits_remaining || 0);
+    } catch (error: any) {
+      console.error('Failed to load credits:', error);
     }
   };
 
@@ -130,6 +147,17 @@ export function Chat() {
       toast({
         title: 'Daily limit reached',
         description: 'You can generate up to 3 videos per day. Try again tomorrow!',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Check credits (each video costs 10 credits)
+    const CREDITS_PER_VIDEO = 10;
+    if (userCredits < CREDITS_PER_VIDEO) {
+      toast({
+        title: 'Insufficient credits',
+        description: `You need ${CREDITS_PER_VIDEO} credits to generate a video. Buy more credits to continue!`,
         variant: 'destructive',
       });
       return;
@@ -332,6 +360,19 @@ export function Chat() {
               created_at: new Date().toISOString(),
             };
             setMessages(prev => [...prev, videoMessage]);
+
+            // Deduct credits
+            const { error: deductError } = await supabase.rpc('deduct_video_credits', {
+              user_uuid: user!.id,
+              credits_to_deduct: 10,
+            });
+
+            if (deductError) {
+              console.error('Failed to deduct credits:', deductError);
+            } else {
+              // Reload credits
+              await loadUserCredits();
+            }
 
             // Update daily count
             setDailyVideoCount(prev => prev + 1);
