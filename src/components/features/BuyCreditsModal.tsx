@@ -195,7 +195,7 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl font-black flex items-center gap-2">
             <Zap className="h-6 w-6 text-primary" />
