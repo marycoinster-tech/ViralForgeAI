@@ -209,6 +209,9 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
             Buy Credits
           </DialogTitle>
         </DialogHeader>
+        <p className="sr-only">
+          Purchase credit packs to generate AI videos. Choose from Starter, Creator, or Pro packs.
+        </p>
 
         {loading ? (
           <div className="flex items-center justify-center py-12">

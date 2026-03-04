@@ -138,6 +138,12 @@ Deno.serve(async (req) => {
       if (!paystackResponse.ok) {
         const errorText = await paystackResponse.text();
         console.error('Paystack initialization error:', errorText);
+        console.error('Paystack request details:', {
+          email: profile.email,
+          amount: pack.price_cents,
+          currency: pack.currency.toUpperCase(),
+          reference,
+        });
         
         // Update transaction to failed
         await supabaseClient
@@ -146,7 +152,7 @@ Deno.serve(async (req) => {
           .eq('payment_reference', reference);
 
         return new Response(
-          JSON.stringify({ error: 'Failed to initialize payment with Paystack' }),
+          JSON.stringify({ error: `Paystack Error: ${errorText}` }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }

@@ -92,6 +92,13 @@ export function Settings() {
 
   const formatPrice = (cents: number, currency: string) => {
     const amount = cents / 100;
+    
+    // For NGN (Nigerian Naira), use custom formatting with ₦ symbol
+    if (currency === 'NGN') {
+      return `₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+    }
+    
+    // For other currencies, use standard formatting
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency,
