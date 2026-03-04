@@ -114,6 +114,7 @@ Deno.serve(async (req) => {
       }
 
       // Initialize Paystack transaction
+      // Note: Paystack expects amounts in kobo for NGN (1 Naira = 100 kobo)
       const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
         method: 'POST',
         headers: {
@@ -122,8 +123,8 @@ Deno.serve(async (req) => {
         },
         body: JSON.stringify({
           email: profile.email,
-          amount: pack.price_cents, // Paystack expects amount in cents
-          currency: pack.currency,
+          amount: pack.price_cents, // Amount in kobo (for NGN) or cents (for other currencies)
+          currency: pack.currency.toUpperCase(), // Must be uppercase (NGN, USD, etc.)
           reference,
           metadata: {
             user_id: user.id,
