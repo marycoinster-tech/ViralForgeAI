@@ -98,16 +98,11 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
       const { data: { user } } = await supabase.auth.getUser();
       const userEmail = user?.email || '';
       
-      // Debug: Check if Paystack key is loaded
-      const paystackKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
-      console.log('Paystack key loaded:', paystackKey ? 'Yes' : 'No');
-      console.log('Key starts with:', paystackKey?.substring(0, 10));
-      
-      if (!paystackKey || paystackKey === 'pk_test_placeholder') {
-        throw new Error('Paystack public key not configured. Please contact support.');
-      }
+      // Paystack public key - hardcoded for client-side use
+      // This is safe to expose as it's a public key meant for frontend
+      const paystackKey = 'pk_live_3b65c6106f2389c6c426c2a5d349e7b7bf78d305';
 
-      // Initialize payment
+      // Initialize payment transaction in our database
       const { data, error } = await supabase.functions.invoke('create-payment', {
         body: {
           action: 'initialize',
@@ -128,9 +123,9 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
         throw new Error(errorMessage);
       }
 
-      const { reference, access_code } = data;
+      const { reference } = data;
 
-      // Open Paystack Popup (MUST be synchronous object)
+      // Open Paystack Popup (inline payment)
       const handler = window.PaystackPop.setup({
         key: paystackKey,
         email: userEmail,
@@ -138,19 +133,20 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
         currency: pack.currency.toUpperCase(),
         ref: reference,
         onClose: function() {
-          console.log('Payment popup closed');
+          console.log('Payment popup closed by user');
           setProcessing(false);
           setSelectedPack(null);
         },
         callback: function(response: any) {
-          console.log('Payment success:', response.reference);
+          console.log('Payment successful:', response.reference);
           // Verify payment (non-blocking)
           verifyPayment(response.reference, pack.credits).catch((error) => {
-            console.error('Verification error in callback:', error);
+            console.error('Verification error:', error);
           });
         },
       });
 
+      // Open the popup
       handler.openIframe();
     } catch (error: any) {
       console.error('Payment initialization error:', error);
