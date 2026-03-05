@@ -97,6 +97,15 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
       // Get user email BEFORE initializing payment
       const { data: { user } } = await supabase.auth.getUser();
       const userEmail = user?.email || '';
+      
+      // Debug: Check if Paystack key is loaded
+      const paystackKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
+      console.log('Paystack key loaded:', paystackKey ? 'Yes' : 'No');
+      console.log('Key starts with:', paystackKey?.substring(0, 10));
+      
+      if (!paystackKey || paystackKey === 'pk_test_placeholder') {
+        throw new Error('Paystack public key not configured. Please contact support.');
+      }
 
       // Initialize payment
       const { data, error } = await supabase.functions.invoke('create-payment', {
@@ -123,7 +132,7 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
 
       // Open Paystack Popup (MUST be synchronous object)
       const handler = window.PaystackPop.setup({
-        key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || 'pk_test_placeholder',
+        key: paystackKey,
         email: userEmail,
         amount: pack.price_cents,
         currency: pack.currency.toUpperCase(),
