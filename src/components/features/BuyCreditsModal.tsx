@@ -129,11 +129,14 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
           setProcessing(false);
           setSelectedPack(null);
         },
-        callback: async (response: any) => {
+        callback: (response: any) => {
+          // MUST be synchronous function - call async verification inside
           console.log('Payment success:', response.reference);
           
-          // Verify payment
-          await verifyPayment(response.reference, pack.credits);
+          // Verify payment (non-blocking)
+          verifyPayment(response.reference, pack.credits).catch((error) => {
+            console.error('Verification error in callback:', error);
+          });
         },
       });
 
