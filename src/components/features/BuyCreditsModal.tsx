@@ -94,6 +94,10 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
     setProcessing(true);
 
     try {
+      // Get user email BEFORE initializing payment
+      const { data: { user } } = await supabase.auth.getUser();
+      const userEmail = user?.email || '';
+
       // Initialize payment
       const { data, error } = await supabase.functions.invoke('create-payment', {
         body: {
@@ -117,22 +121,20 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
 
       const { reference, access_code } = data;
 
-      // Open Paystack Popup
+      // Open Paystack Popup (MUST be synchronous object)
       const handler = window.PaystackPop.setup({
         key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || 'pk_test_placeholder',
-        email: (await supabase.auth.getUser()).data.user?.email || '',
+        email: userEmail,
         amount: pack.price_cents,
-        currency: pack.currency,
+        currency: pack.currency.toUpperCase(),
         ref: reference,
-        onClose: () => {
+        onClose: function() {
           console.log('Payment popup closed');
           setProcessing(false);
           setSelectedPack(null);
         },
-        callback: (response: any) => {
-          // MUST be synchronous function - call async verification inside
+        callback: function(response: any) {
           console.log('Payment success:', response.reference);
-          
           // Verify payment (non-blocking)
           verifyPayment(response.reference, pack.credits).catch((error) => {
             console.error('Verification error in callback:', error);

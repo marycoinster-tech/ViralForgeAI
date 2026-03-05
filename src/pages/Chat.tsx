@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Sparkles, RotateCcw, X, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+import { BuyCreditsModal } from '@/components/features/BuyCreditsModal';
 
 interface Message {
   id: string;
@@ -42,6 +43,7 @@ export function Chat() {
   const [videoMode, setVideoMode] = useState(false);
   const [dailyVideoCount, setDailyVideoCount] = useState(0);
   const [userCredits, setUserCredits] = useState(0);
+  const [showBuyCredits, setShowBuyCredits] = useState(false);
   const generationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const videoPollingRef = useRef<NodeJS.Timeout | null>(null);
@@ -142,13 +144,14 @@ export function Chat() {
   };
 
   const handleVideoGeneration = async (prompt: string, duration: number = 10, aspectRatio: '16:9' | '9:16' | '1:1' = '16:9', style: string = 'realistic') => {
-    // Check daily limit
-    if (dailyVideoCount >= 3) {
+    // Check daily limit (1 video per day)
+    if (dailyVideoCount >= 1) {
       toast({
         title: 'Daily limit reached',
-        description: 'You can generate up to 3 videos per day. Try again tomorrow!',
+        description: 'You can generate 1 video per day. Buy more credits or try again tomorrow!',
         variant: 'destructive',
       });
+      setShowBuyCredits(true);
       return;
     }
 
@@ -160,6 +163,7 @@ export function Chat() {
         description: `You need ${CREDITS_PER_VIDEO} credits to generate a video. Buy more credits to continue!`,
         variant: 'destructive',
       });
+      setShowBuyCredits(true);
       return;
     }
 
@@ -859,6 +863,16 @@ export function Chat() {
           onVideoModeToggle={() => setVideoMode(!videoMode)}
         />
       </div>
+
+      {/* Buy Credits Modal */}
+      <BuyCreditsModal
+        open={showBuyCredits}
+        onOpenChange={setShowBuyCredits}
+        onSuccess={() => {
+          loadUserCredits();
+          setShowBuyCredits(false);
+        }}
+      />
     </AppLayout>
   );
 }
