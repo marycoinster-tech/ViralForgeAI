@@ -34,6 +34,8 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
   const [loading, setLoading] = useState(true);
   const [selectedPack, setSelectedPack] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [initializingPayment, setInitializingPayment] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -43,11 +45,38 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
   }, [open]);
 
   const loadPaystackScript = () => {
-    if (document.querySelector('script[src*="paystack"]')) return;
+    // Check if already loaded
+    if (window.PaystackPop) {
+      setScriptLoaded(true);
+      return;
+    }
+    
+    if (document.querySelector('script[src*="paystack"]')) {
+      // Script tag exists, wait for it to load
+      const checkLoaded = setInterval(() => {
+        if (window.PaystackPop) {
+          setScriptLoaded(true);
+          clearInterval(checkLoaded);
+        }
+      }, 100);
+      return;
+    }
     
     const script = document.createElement('script');
     script.src = 'https://js.paystack.co/v1/inline.js';
     script.async = true;
+    script.onload = () => {
+      console.log('Paystack script loaded successfully');
+      setScriptLoaded(true);
+    };
+    script.onerror = () => {
+      console.error('Failed to load Paystack script');
+      toast({
+        title: 'Payment system unavailable',
+        description: 'Failed to load payment provider. Please refresh the page.',
+        variant: 'destructive',
+      });
+    };
     document.body.appendChild(script);
   };
 
@@ -90,8 +119,17 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
   };
 
   const handlePurchase = async (pack: CreditPack) => {
+    // Check if Paystack is loaded
+    if (!window.PaystackPop) {
+      toast({
+        title: 'Payment system loading...',
+        description: 'Please wait a moment and try again.',
+      });
+      return;
+    }
+
     setSelectedPack(pack.id);
-    setProcessing(true);
+    setInitializingPayment(true);
 
     try {
       // Get user email BEFORE initializing payment
@@ -124,6 +162,10 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
       }
 
       const { reference } = data;
+      
+      console.log('Opening Paystack popup with reference:', reference);
+      setInitializingPayment(false);
+      setProcessing(true);
 
       // Open Paystack Popup (inline payment)
       const handler = window.PaystackPop.setup({
@@ -146,8 +188,23 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
         },
       });
 
-      // Open the popup
-      handler.openIframe();
+      // Small delay to ensure handler is ready
+      setTimeout(() => {
+        try {
+          handler.openIframe();
+          console.log('Paystack popup opened');
+        } catch (error) {
+          console.error('Failed to open Paystack popup:', error);
+          toast({
+            title: 'Failed to open payment window',
+            description: 'Please disable your popup blocker and try again.',
+            variant: 'destructive',
+          });
+          setProcessing(false);
+          setSelectedPack(null);
+        }
+      }, 100);
+      
     } catch (error: any) {
       console.error('Payment initialization error:', error);
       toast({
@@ -155,6 +212,7 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
         description: error.message,
         variant: 'destructive',
       });
+      setInitializingPayment(false);
       setProcessing(false);
       setSelectedPack(null);
     }
@@ -269,17 +327,22 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
                     </div>
                     <Button
                       onClick={() => handlePurchase(pack)}
-                      disabled={processing}
+                      disabled={processing || initializingPayment || !scriptLoaded}
                       className={`w-full ${
                         pack.is_popular
                           ? 'bg-gradient-to-r from-primary to-accent hover:opacity-90'
                           : ''
                       }`}
                     >
-                      {processing && selectedPack === pack.id ? (
+                      {(processing || initializingPayment) && selectedPack === pack.id ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Processing...
+                          {initializingPayment ? 'Please wait...' : 'Opening payment...'}
+                        </>
+                      ) : !scriptLoaded ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Loading...
                         </>
                       ) : (
                         <>
