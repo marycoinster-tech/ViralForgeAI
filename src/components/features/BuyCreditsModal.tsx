@@ -129,101 +129,83 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
     }
 
     setSelectedPack(pack.id);
-    setInitializingPayment(true);
+    setProcessing(true);
 
     try {
-      // Get user email BEFORE initializing payment
+      // Get user email
       const { data: { user } } = await supabase.auth.getUser();
-      const userEmail = user?.email || '';
+      if (!user?.email) {
+        throw new Error('Please log in to purchase credits');
+      }
+      
+      const userEmail = user.email;
       
       // Paystack public key - hardcoded for client-side use
-      // This is safe to expose as it's a public key meant for frontend
       const paystackKey = 'pk_live_3b65c6106f2389c6c426c2a5d349e7b7bf78d305';
 
-      // Initialize payment transaction in our database
-      const { data, error } = await supabase.functions.invoke('create-payment', {
-        body: {
-          action: 'initialize',
-          packId: pack.id,
-        },
+      // Generate unique reference for this transaction
+      const reference = `vf-${user.id.substring(0, 8)}-${Date.now()}`;
+      
+      console.log('Opening Paystack popup:', {
+        email: userEmail,
+        amount: pack.price_cents,
+        currency: pack.currency,
+        reference,
       });
 
-      if (error) {
-        let errorMessage = error.message;
-        if (error instanceof FunctionsHttpError) {
-          try {
-            const textContent = await error.context?.text();
-            errorMessage = textContent || error.message || 'Unknown error';
-          } catch {
-            errorMessage = error.message || 'Failed to initialize payment';
-          }
-        }
-        throw new Error(errorMessage);
-      }
-
-      const { reference } = data;
-      
-      console.log('Opening Paystack popup with reference:', reference);
-      setInitializingPayment(false);
-      setProcessing(true);
-
-      // Open Paystack Popup (inline payment)
+      // Open Paystack Popup directly (pure frontend approach)
       const handler = window.PaystackPop.setup({
         key: paystackKey,
         email: userEmail,
         amount: pack.price_cents,
         currency: pack.currency.toUpperCase(),
         ref: reference,
+        metadata: {
+          user_id: user.id,
+          pack_id: pack.id,
+          credits: pack.credits,
+        },
         onClose: function() {
           console.log('Payment popup closed by user');
           setProcessing(false);
           setSelectedPack(null);
         },
         callback: function(response: any) {
-          console.log('Payment successful:', response.reference);
-          // Verify payment (non-blocking)
-          verifyPayment(response.reference, pack.credits).catch((error) => {
+          console.log('Payment successful! Reference:', response.reference);
+          // Verify payment and credit user
+          verifyPayment(response.reference, pack.id, pack.credits).catch((error) => {
             console.error('Verification error:', error);
+            setProcessing(false);
+            setSelectedPack(null);
           });
         },
       });
 
-      // Small delay to ensure handler is ready
-      setTimeout(() => {
-        try {
-          handler.openIframe();
-          console.log('Paystack popup opened');
-        } catch (error) {
-          console.error('Failed to open Paystack popup:', error);
-          toast({
-            title: 'Failed to open payment window',
-            description: 'Please disable your popup blocker and try again.',
-            variant: 'destructive',
-          });
-          setProcessing(false);
-          setSelectedPack(null);
-        }
-      }, 100);
+      // Open immediately (no delay needed)
+      handler.openIframe();
+      console.log('Paystack popup opened successfully');
       
     } catch (error: any) {
-      console.error('Payment initialization error:', error);
+      console.error('Payment error:', error);
       toast({
         title: 'Payment failed',
-        description: error.message,
+        description: error.message || 'Could not open payment window',
         variant: 'destructive',
       });
-      setInitializingPayment(false);
       setProcessing(false);
       setSelectedPack(null);
     }
   };
 
-  const verifyPayment = async (reference: string, credits: number) => {
+  const verifyPayment = async (reference: string, packId: string, credits: number) => {
     try {
+      console.log('Verifying payment:', reference);
+      
       const { data, error } = await supabase.functions.invoke('create-payment', {
         body: {
           action: 'verify',
           reference,
+          packId,
         },
       });
 
@@ -240,27 +222,29 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
         throw new Error(errorMessage);
       }
 
+      console.log('Payment verified:', data);
+
       if (data.status === 'success') {
         toast({
-          title: 'Credits purchased!',
-          description: `${credits} credits have been added to your account 🎉`,
+          title: 'Credits purchased! 🎉',
+          description: `${credits} credits have been added to your account`,
         });
         
-        onOpenChange(false);
         setProcessing(false);
         setSelectedPack(null);
+        onOpenChange(false);
         
         if (onSuccess) {
           onSuccess();
         }
       } else {
-        throw new Error('Payment verification failed');
+        throw new Error(data.message || 'Payment verification failed');
       }
     } catch (error: any) {
       console.error('Payment verification error:', error);
       toast({
-        title: 'Payment verification failed',
-        description: error.message,
+        title: 'Verification failed',
+        description: error.message || 'Could not verify payment. Contact support if debited.',
         variant: 'destructive',
       });
       setProcessing(false);
