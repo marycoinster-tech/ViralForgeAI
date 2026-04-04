@@ -7,6 +7,8 @@ import { Signup } from '@/pages/Signup';
 import { Chat } from '@/pages/Chat';
 import { Home } from '@/pages/Home';
 import { Settings } from '@/pages/Settings';
+import { HookBattle } from '@/pages/HookBattle';
+import { ViralDNA } from '@/pages/ViralDNA';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -64,6 +66,8 @@ function AppRoutes() {
               <Route path="/" element={<Chat />} />
               <Route path="/:conversationId" element={<Chat />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/hook-battle" element={<HookBattle />} />
+              <Route path="/viral-dna" element={<ViralDNA />} />
             </Routes>
           </PrivateRoute>
         }

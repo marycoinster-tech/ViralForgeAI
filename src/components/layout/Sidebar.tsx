@@ -12,7 +12,9 @@ import {
   Sparkles,
   User,
   Trash2,
-  ShoppingCart
+  ShoppingCart,
+  Swords,
+  Dna
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { BuyCreditsModal } from '@/components/features/BuyCreditsModal';
@@ -154,6 +156,36 @@ export function Sidebar({ onClose }: SidebarProps) {
           <Plus className="h-4 w-4" />
           New Generation
         </Button>
+      </div>
+
+      {/* Feature Nav */}
+      <div className="px-3 pt-3 pb-1 space-y-1">
+        <Link
+          to="/app/hook-battle"
+          onClick={onClose}
+          className={`flex items-center gap-3 p-2.5 rounded-lg transition-colors group ${
+            location.pathname === '/app/hook-battle'
+              ? 'bg-primary/10 border border-primary/20 text-primary'
+              : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Swords className="h-4 w-4 shrink-0" />
+          <span className="text-sm font-semibold">Hook Battle</span>
+          <span className="ml-auto text-[10px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">NEW</span>
+        </Link>
+        <Link
+          to="/app/viral-dna"
+          onClick={onClose}
+          className={`flex items-center gap-3 p-2.5 rounded-lg transition-colors group ${
+            location.pathname === '/app/viral-dna'
+              ? 'bg-accent/10 border border-accent/20 text-accent'
+              : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Dna className="h-4 w-4 shrink-0" />
+          <span className="text-sm font-semibold">Viral DNA</span>
+          <span className="ml-auto text-[10px] font-bold bg-accent/10 text-accent px-1.5 py-0.5 rounded-full">NEW</span>
+        </Link>
       </div>
 
       {/* Conversations */}
