@@ -14,7 +14,8 @@ import {
   Trash2,
   ShoppingCart,
   Swords,
-  Dna
+  Dna,
+  CalendarDays
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { BuyCreditsModal } from '@/components/features/BuyCreditsModal';
@@ -185,6 +186,19 @@ export function Sidebar({ onClose }: SidebarProps) {
           <Dna className="h-4 w-4 shrink-0" />
           <span className="text-sm font-semibold">Viral DNA</span>
           <span className="ml-auto text-[10px] font-bold bg-accent/10 text-accent px-1.5 py-0.5 rounded-full">NEW</span>
+        </Link>
+        <Link
+          to="/app/calendar"
+          onClick={onClose}
+          className={`flex items-center gap-3 p-2.5 rounded-lg transition-colors group ${
+            location.pathname === '/app/calendar'
+              ? 'bg-green-500/10 border border-green-500/20 text-green-400'
+              : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <CalendarDays className="h-4 w-4 shrink-0" />
+          <span className="text-sm font-semibold">Content Calendar</span>
+          <span className="ml-auto text-[10px] font-bold bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded-full">NEW</span>
         </Link>
       </div>
 
