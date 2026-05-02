@@ -8,10 +8,13 @@ import { GeneratorInput, Niche, Vibe, Goal, Platform } from '@/types/content';
 interface GeneratorFormProps {
   onGenerate: (input: GeneratorInput) => void;
   isGenerating: boolean;
+  defaultNiche?: string;
 }
 
-export function GeneratorForm({ onGenerate, isGenerating }: GeneratorFormProps) {
-  const [selectedNiche, setSelectedNiche] = useState<Niche>('anime');
+export function GeneratorForm({ onGenerate, isGenerating, defaultNiche }: GeneratorFormProps) {
+  const [selectedNiche, setSelectedNiche] = useState<Niche>(
+    (defaultNiche as Niche) || 'anime'
+  );
   const [selectedVibe, setSelectedVibe] = useState<Vibe>('dark');
   const [selectedGoal, setSelectedGoal] = useState<Goal>('followers');
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('tiktok');

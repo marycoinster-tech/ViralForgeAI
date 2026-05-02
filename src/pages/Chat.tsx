@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { UserMessage } from '@/components/chat/UserMessage';
 import { AIMessage } from '@/components/chat/AIMessage';
@@ -24,6 +24,8 @@ interface Message {
 export function Chat() {
   const { conversationId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const prefilledNiche = (location.state as { prefilledNiche?: string } | null)?.prefilledNiche;
   const { user } = useAuth();
   const { toast } = useToast();
   
@@ -861,6 +863,7 @@ export function Chat() {
           disabled={isGenerating || (videoGenerationStatus?.active || false)}
           videoMode={videoMode}
           onVideoModeToggle={() => setVideoMode(!videoMode)}
+          defaultNiche={prefilledNiche}
         />
       </div>
 

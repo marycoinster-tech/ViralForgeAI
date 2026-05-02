@@ -1,17 +1,30 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { BuyCreditsModal } from '@/components/features/BuyCreditsModal';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import { Swords, Sparkles, Trophy, Users, CheckCircle2, Loader2, RefreshCw, Copy, Zap } from 'lucide-react';
+import { Swords, Trophy, Users, CheckCircle2, Loader2, RefreshCw, Copy, Zap, CalendarDays, X } from 'lucide-react';
 
 const NICHES = ['anime', 'motivation', 'money', 'dating', 'gym', 'ai & tech', 'storytime', 'fashion', 'gaming', 'beauty', 'food', 'travel'];
 const VIBES = ['dark', 'chill', 'toxic', 'motivational', 'mysterious', 'hype', 'educational', 'funny'];
+const PLATFORMS = ['TikTok', 'Instagram Reels', 'YouTube Shorts'];
+const STATUSES = ['scheduled', 'draft'] as const;
+type ScheduleStatus = typeof STATUSES[number];
+
+function toYMD(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 const TRIGGER_COLORS: Record<string, string> = {
   CURIOSITY: 'from-violet-500/20 to-purple-500/10 border-violet-500/40',
@@ -37,6 +50,15 @@ interface Hook {
   why: string;
 }
 
+interface ScheduleForm {
+  title: string;
+  scheduled_date: string;
+  scheduled_time: string;
+  platform: string;
+  status: ScheduleStatus;
+  notes: string;
+}
+
 interface BattleResult {
   battle_id: string;
   hooks: Hook[];
@@ -49,8 +71,17 @@ interface VoteCount {
   count: number;
 }
 
+const OPTIMAL_TIMES: Record<string, string[]> = {
+  TikTok: ['07:00', '12:00', '19:00', '20:00'],
+  'Instagram Reels': ['09:00', '14:00', '18:00'],
+  'YouTube Shorts': ['12:00', '19:00'],
+};
+
 export function HookBattle() {
+  const { user } = useAuth();
   const { toast } = useToast();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [topic, setTopic] = useState('');
   const [niche, setNiche] = useState('');
   const [vibe, setVibe] = useState('');
@@ -62,6 +93,29 @@ export function HookBattle() {
   const [voteCounts, setVoteCounts] = useState<VoteCount[]>([]);
   const [showBuyCredits, setShowBuyCredits] = useState(false);
   const [communityMode, setCommunityMode] = useState(false);
+
+  // Schedule modal state
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [scheduleHookIndex, setScheduleHookIndex] = useState<number | null>(null);
+  const [scheduleForm, setScheduleForm] = useState<ScheduleForm>({
+    title: '',
+    scheduled_date: toYMD(new Date()),
+    scheduled_time: '19:00',
+    platform: 'TikTok',
+    status: 'scheduled',
+    notes: '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  // Pre-fill niche from Home page trending click
+  useEffect(() => {
+    const state = location.state as { prefilledNiche?: string } | null;
+    if (state?.prefilledNiche) {
+      setNiche(state.prefilledNiche);
+      // Clear the location state so it doesn't re-trigger
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, []);
 
   const handleGenerate = async () => {
     if (!topic.trim() || !niche || !vibe) {
@@ -125,6 +179,48 @@ export function HookBattle() {
   const copyHook = (text: string) => {
     navigator.clipboard.writeText(text);
     toast({ title: 'Copied!', description: 'Hook copied to clipboard.' });
+  };
+
+  const openScheduleModal = (hookIndex: number) => {
+    if (!result) return;
+    const hook = result.hooks[hookIndex];
+    setScheduleHookIndex(hookIndex);
+    setScheduleForm(f => ({
+      ...f,
+      title: `${niche.charAt(0).toUpperCase() + niche.slice(1)} – ${hook.trigger} hook`,
+    }));
+    setShowSchedule(true);
+  };
+
+  const handleScheduleSave = async () => {
+    if (!result || scheduleHookIndex === null || !user) return;
+    if (!scheduleForm.title.trim()) {
+      toast({ title: 'Title is required', variant: 'destructive' });
+      return;
+    }
+
+    setSaving(true);
+    const hook = result.hooks[scheduleHookIndex];
+
+    const { error } = await supabase.from('scheduled_posts').insert({
+      user_id: user.id,
+      title: scheduleForm.title.trim(),
+      hook: hook.text,
+      niche,
+      platform: scheduleForm.platform,
+      scheduled_date: scheduleForm.scheduled_date,
+      scheduled_time: scheduleForm.scheduled_time + ':00',
+      status: scheduleForm.status,
+      notes: scheduleForm.notes.trim() || null,
+    });
+
+    if (error) {
+      toast({ title: 'Failed to schedule', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Post scheduled! 📅', description: 'Find it in your Content Calendar.' });
+      setShowSchedule(false);
+    }
+    setSaving(false);
   };
 
   const totalVotes = voteCounts.reduce((sum, v) => sum + v.count, 0);
@@ -290,7 +386,7 @@ export function HookBattle() {
                       <p className="text-xs text-muted-foreground mb-4">{hook.why}</p>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Button
                           size="sm"
                           variant="ghost"
@@ -299,6 +395,15 @@ export function HookBattle() {
                         >
                           <Copy className="h-3.5 w-3.5" />
                           Copy
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={e => { e.stopPropagation(); openScheduleModal(i); }}
+                          className="h-8 gap-1.5 text-xs border-green-500/30 text-green-400 hover:bg-green-500/10"
+                        >
+                          <CalendarDays className="h-3.5 w-3.5" />
+                          Schedule
                         </Button>
 
                         {communityMode && (
@@ -354,6 +459,128 @@ export function HookBattle() {
       </div>
 
       <BuyCreditsModal open={showBuyCredits} onOpenChange={setShowBuyCredits} />
+
+      {/* Schedule Post Modal */}
+      <Dialog open={showSchedule} onOpenChange={setShowSchedule}>
+        <DialogContent className="max-w-md w-full">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarDays className="h-5 w-5 text-green-400" />
+              Schedule This Hook
+            </DialogTitle>
+          </DialogHeader>
+
+          {result && scheduleHookIndex !== null && (
+            <div className="space-y-4 pt-1">
+              {/* Hook preview */}
+              <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                <p className="text-[10px] text-muted-foreground font-bold uppercase mb-1">
+                  {result.hooks[scheduleHookIndex].emoji} {result.hooks[scheduleHookIndex].trigger} Hook
+                </p>
+                <p className="text-sm font-bold">"{result.hooks[scheduleHookIndex].text}"</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">Post Title *</label>
+                <input
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                  placeholder="e.g. Money niche FOMO hook"
+                  value={scheduleForm.title}
+                  onChange={e => setScheduleForm(f => ({ ...f, title: e.target.value }))}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold">Platform</label>
+                  <Select value={scheduleForm.platform} onValueChange={v => setScheduleForm(f => ({ ...f, platform: v }))}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>{PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold">Status</label>
+                  <Select value={scheduleForm.status} onValueChange={v => setScheduleForm(f => ({ ...f, status: v as ScheduleStatus }))}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="scheduled">📅 Scheduled</SelectItem>
+                      <SelectItem value="draft">📝 Draft</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold">Date</label>
+                  <input
+                    type="date"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                    value={scheduleForm.scheduled_date}
+                    onChange={e => setScheduleForm(f => ({ ...f, scheduled_date: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold">Time</label>
+                  <input
+                    type="time"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                    value={scheduleForm.scheduled_time}
+                    onChange={e => setScheduleForm(f => ({ ...f, scheduled_time: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              {/* Optimal time chips */}
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
+                <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">
+                  <Zap className="h-3 w-3 inline mr-1 text-primary" />
+                  Best times for {scheduleForm.platform}:
+                </p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {(OPTIMAL_TIMES[scheduleForm.platform] ?? []).map(t => (
+                    <button
+                      key={t}
+                      onClick={() => setScheduleForm(f => ({ ...f, scheduled_time: t }))}
+                      className={`text-[11px] px-2 py-0.5 rounded-full transition-all ${
+                        scheduleForm.scheduled_time === t
+                          ? 'bg-primary text-primary-foreground font-bold'
+                          : 'bg-primary/10 text-primary hover:bg-primary/20'
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">Notes <span className="text-muted-foreground font-normal">(optional)</span></label>
+                <input
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                  placeholder="Any reminder..."
+                  value={scheduleForm.notes}
+                  onChange={e => setScheduleForm(f => ({ ...f, notes: e.target.value }))}
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => setShowSchedule(false)} className="flex-1 gap-2">
+                  <X className="h-4 w-4" /> Cancel
+                </Button>
+                <Button
+                  onClick={handleScheduleSave}
+                  disabled={saving}
+                  className="flex-1 gap-2 bg-gradient-to-r from-green-600 to-emerald-500 hover:opacity-90 text-white"
+                >
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarDays className="h-4 w-4" />}
+                  Schedule Post
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

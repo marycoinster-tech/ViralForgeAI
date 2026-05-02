@@ -20,12 +20,13 @@ interface InputBarProps {
   disabled?: boolean;
   videoMode?: boolean;
   onVideoModeToggle?: () => void;
+  defaultNiche?: string;
 }
 
-export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = false, onVideoModeToggle }: InputBarProps) {
+export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = false, onVideoModeToggle, defaultNiche }: InputBarProps) {
   const { toast } = useToast();
   const [customTopic, setCustomTopic] = useState('');
-  const [selectedNiche, setSelectedNiche] = useState<Niche>('anime');
+  const [selectedNiche, setSelectedNiche] = useState<Niche>((defaultNiche as Niche) || 'anime');
   const [selectedVibe, setSelectedVibe] = useState<Vibe>('dark');
   const [selectedGoal, setSelectedGoal] = useState<Goal>('followers');
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('tiktok');
