@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Copy, Check, Flame, FileText, Hash, Eye, Lightbulb, Sparkles, RotateCw } from 'lucide-react';
 import { VideoMessage } from './VideoMessage';
+import { ContentReviewPanel } from '@/components/features/ContentReviewPanel';
 
 interface AIMessageProps {
   content: any; // Can be structured viral content, plain text, or video
@@ -239,6 +240,16 @@ ${content.postingTip}
               </Button>
             )}
           </div>
+
+          {/* Human-in-the-Loop Review + Polish */}
+          <ContentReviewPanel
+            hook={content.hook}
+            script={content.script}
+            caption={content.caption}
+            hashtags={content.hashtags || []}
+            niche={content.niche || ''}
+            vibe={content.vibe || ''}
+          />
         </div>
       </div>
     );

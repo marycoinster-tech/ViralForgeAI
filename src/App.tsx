@@ -10,6 +10,7 @@ import { Settings } from '@/pages/Settings';
 import { HookBattle } from '@/pages/HookBattle';
 import { ViralDNA } from '@/pages/ViralDNA';
 import { Calendar } from '@/pages/Calendar';
+import { Insights } from '@/pages/Insights';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -70,6 +71,7 @@ function AppRoutes() {
               <Route path="/hook-battle" element={<HookBattle />} />
               <Route path="/viral-dna" element={<ViralDNA />} />
               <Route path="/calendar" element={<Calendar />} />
+              <Route path="/insights" element={<Insights />} />
             </Routes>
           </PrivateRoute>
         }
