@@ -18,6 +18,9 @@ import {
   Sparkles,
   Receipt,
   ShoppingCart,
+  Copy,
+  Users,
+  Gift,
 } from 'lucide-react';
 import {
   Select,
@@ -51,11 +54,14 @@ export function Settings() {
   const [credits, setCredits] = useState(0);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [showBuyCredits, setShowBuyCredits] = useState(false);
+  const [referralStats, setReferralStats] = useState<{ total: number; credited: number } | null>(null);
+  const [copiedRef, setCopiedRef] = useState(false);
 
   useEffect(() => {
     if (user) {
       loadCredits();
       loadTransactions();
+      loadReferralStats();
     }
   }, [user]);
 
@@ -72,6 +78,30 @@ export function Settings() {
     } catch (error: any) {
       console.error('Failed to load credits:', error);
     }
+  };
+
+  const loadReferralStats = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('referrals')
+        .select('id, credited_at')
+        .eq('referrer_id', user!.id);
+
+      if (error) throw error;
+      const total = data?.length || 0;
+      const credited = data?.filter(r => r.credited_at).length || 0;
+      setReferralStats({ total, credited });
+    } catch (error: any) {
+      console.error('Failed to load referral stats:', error);
+    }
+  };
+
+  const handleCopyReferralLink = () => {
+    const link = `${window.location.origin}/signup?ref=${user?.username}`;
+    navigator.clipboard.writeText(link);
+    setCopiedRef(true);
+    setTimeout(() => setCopiedRef(false), 2000);
+    toast({ title: 'Referral link copied!', description: 'Share it to earn 3 bonus credits per signup.' });
   };
 
   const loadTransactions = async () => {
@@ -284,6 +314,74 @@ export function Settings() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* Referral Section */}
+        <div className="glass-card p-6 space-y-4">
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" />
+            Referral Program
+          </h2>
+
+          <div className="space-y-4">
+            {/* Stats */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-4 rounded-lg bg-gradient-to-br from-primary/10 to-accent/10 border border-primary/20 text-center">
+                <p className="text-3xl font-black text-gradient">{referralStats?.total ?? 0}</p>
+                <p className="text-xs text-muted-foreground mt-1">Friends referred</p>
+              </div>
+              <div className="p-4 rounded-lg bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 text-center">
+                <p className="text-3xl font-black text-green-400">{(referralStats?.total ?? 0) * 3}</p>
+                <p className="text-xs text-muted-foreground mt-1">Credits earned</p>
+              </div>
+            </div>
+
+            {/* How it works */}
+            <div className="p-4 rounded-lg bg-muted/30 border border-border/40 space-y-2">
+              <div className="flex items-center gap-2 mb-2">
+                <Gift className="h-4 w-4 text-primary" />
+                <p className="text-sm font-semibold">How it works</p>
+              </div>
+              <div className="space-y-1.5 text-xs text-muted-foreground">
+                <div className="flex items-start gap-2">
+                  <span className="text-primary font-bold shrink-0">1.</span>
+                  <span>Share your unique referral link with friends</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-primary font-bold shrink-0">2.</span>
+                  <span>They sign up using your link</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-primary font-bold shrink-0">3.</span>
+                  <span>Both of you get <strong className="text-foreground">3 bonus credits</strong> instantly</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Referral link */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Your referral link</label>
+              <div className="flex gap-2">
+                <div className="flex-1 px-3 py-2.5 rounded-lg bg-muted/30 border border-border/40 text-sm text-muted-foreground truncate font-mono text-xs">
+                  {window.location.origin}/signup?ref={user?.username}
+                </div>
+                <Button
+                  onClick={handleCopyReferralLink}
+                  variant="outline"
+                  className="shrink-0 border-primary/20 hover:bg-primary/10"
+                >
+                  {copiedRef ? (
+                    <Check className="h-4 w-4 text-green-400" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Share on TikTok, Instagram, or anywhere your audience is. Every signup = free credits for both of you.
+              </p>
             </div>
           </div>
         </div>

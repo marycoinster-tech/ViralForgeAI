@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -19,6 +19,8 @@ export function Signup() {
   const { toast } = useToast();
   const { login } = useAuth();
   const formStateRef = useRef({ email: '', username: '', password: '', otp: '', step: 'email' as 'email' | 'verify' });
+  const [searchParams] = useSearchParams();
+  const referralCode = searchParams.get('ref') || localStorage.getItem('viralforge_ref') || '';
 
   // Persist form state to survive page focus/blur
   useEffect(() => {
@@ -37,6 +39,12 @@ export function Signup() {
       } catch (e) {
         console.error('Failed to restore signup state');
       }
+    }
+
+    // Persist referral code from URL to localStorage so it survives page reloads
+    const refFromUrl = new URLSearchParams(window.location.search).get('ref');
+    if (refFromUrl) {
+      localStorage.setItem('viralforge_ref', refFromUrl);
     }
   }, []);
 
@@ -150,7 +158,28 @@ export function Signup() {
       if (updateData.user) {
         // Clear saved state
         clearSavedState();
-        
+
+        // Process referral if a ref code was captured
+        const storedRef = localStorage.getItem('viralforge_ref');
+        if (storedRef) {
+          try {
+            const { data: refResult, error: refError } = await supabase.rpc('process_referral', {
+              p_referrer_username: storedRef,
+              p_referee_id: updateData.user.id,
+            });
+            if (!refError && refResult?.success) {
+              console.log('Referral processed:', refResult);
+              toast({
+                title: '🎉 Referral bonus!',
+                description: `You and ${storedRef} both received 3 bonus credits!`,
+              });
+            }
+          } catch (e) {
+            console.error('Referral processing failed (non-critical):', e);
+          }
+          localStorage.removeItem('viralforge_ref');
+        }
+
         // Login with user data (AuthContext will handle profile creation)
         login({
           id: updateData.user.id,
