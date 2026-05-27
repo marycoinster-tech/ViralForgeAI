@@ -21,7 +21,11 @@ import {
   Copy,
   Users,
   Gift,
+  Share2,
+  Twitter,
+  ExternalLink,
 } from 'lucide-react';
+import { useReferralNotifications } from '@/hooks/useReferralNotifications';
 import {
   Select,
   SelectContent,
@@ -56,12 +60,15 @@ export function Settings() {
   const [showBuyCredits, setShowBuyCredits] = useState(false);
   const [referralStats, setReferralStats] = useState<{ total: number; credited: number } | null>(null);
   const [copiedRef, setCopiedRef] = useState(false);
+  const { clearNotifications } = useReferralNotifications();
 
   useEffect(() => {
     if (user) {
       loadCredits();
       loadTransactions();
       loadReferralStats();
+      // Clear sidebar notification badge when user opens settings
+      clearNotifications();
     }
   }, [user]);
 
@@ -96,12 +103,36 @@ export function Settings() {
     }
   };
 
+  const referralLink = `${window.location.origin}/signup?ref=${user?.username}`;
+
   const handleCopyReferralLink = () => {
-    const link = `${window.location.origin}/signup?ref=${user?.username}`;
-    navigator.clipboard.writeText(link);
+    navigator.clipboard.writeText(referralLink);
     setCopiedRef(true);
     setTimeout(() => setCopiedRef(false), 2000);
     toast({ title: 'Referral link copied!', description: 'Share it to earn 3 bonus credits per signup.' });
+  };
+
+  const tiktokCaption = `POV: you found the AI tool that writes viral TikTok hooks for you in seconds 😭\n\nI've been using ViralForge AI and honestly?? It's insane. It generates scroll-stopping hooks, scripts, and captions instantly.\n\nSign up with my link and we BOTH get free credits 🔥\n${referralLink}\n\n#ViralForgeAI #ContentCreator #AITools #TikTokGrowth #GrowOnTikTok #FYP`;
+
+  const instagramCaption = `Not me finding an AI that literally writes my viral content for me 😭✨\n\nViralForge AI generates hooks, scripts & captions that actually slap. I'm not joking, try it yourself.\n\nLink in bio 👉 ${referralLink}\n(we both get free credits when you sign up 🎁)\n\n#ViralForgeAI #ContentCreator #InstagramGrowth #AITools #Reels`;
+
+  const twitterText = `This AI writes viral TikTok hooks for me in seconds 🤯\n\nBeen using @ViralForgeAI and it's actually goated. Sign up with my link & we both get free credits 👇\n\n${referralLink}`;
+
+  const handleShareTikTok = () => {
+    navigator.clipboard.writeText(tiktokCaption);
+    toast({ title: '📋 TikTok caption copied!', description: 'Open TikTok, paste this caption, and go viral.' });
+    setTimeout(() => window.open('https://www.tiktok.com', '_blank'), 600);
+  };
+
+  const handleShareInstagram = () => {
+    navigator.clipboard.writeText(instagramCaption);
+    toast({ title: '📋 Instagram caption copied!', description: 'Open Instagram, create a Reel, and paste the caption.' });
+    setTimeout(() => window.open('https://www.instagram.com', '_blank'), 600);
+  };
+
+  const handleShareTwitter = () => {
+    const encoded = encodeURIComponent(twitterText);
+    window.open(`https://twitter.com/intent/tweet?text=${encoded}`, '_blank');
   };
 
   const loadTransactions = async () => {
@@ -364,8 +395,8 @@ export function Settings() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Your referral link</label>
               <div className="flex gap-2">
-                <div className="flex-1 px-3 py-2.5 rounded-lg bg-muted/30 border border-border/40 text-sm text-muted-foreground truncate font-mono text-xs">
-                  {window.location.origin}/signup?ref={user?.username}
+                <div className="flex-1 px-3 py-2.5 rounded-lg bg-muted/30 border border-border/40 text-muted-foreground truncate font-mono text-xs">
+                  {referralLink}
                 </div>
                 <Button
                   onClick={handleCopyReferralLink}
@@ -379,8 +410,68 @@ export function Settings() {
                   )}
                 </Button>
               </div>
+            </div>
+
+            {/* Social share buttons */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Share2 className="h-4 w-4 text-primary" />
+                <p className="text-sm font-semibold">Share your link & go viral</p>
+              </div>
               <p className="text-xs text-muted-foreground">
-                Share on TikTok, Instagram, or anywhere your audience is. Every signup = free credits for both of you.
+                Each platform gets a ready-to-post caption with your link. Just tap, paste, and post.
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {/* TikTok */}
+                <button
+                  onClick={handleShareTikTok}
+                  className="flex flex-col items-center gap-2 p-3 rounded-xl border border-border/40 bg-muted/20 hover:bg-muted/40 hover:border-primary/30 transition-all group"
+                >
+                  <div className="w-9 h-9 rounded-full bg-black flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <svg viewBox="0 0 24 24" fill="white" className="w-5 h-5">
+                      <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.32 6.32 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.75a4.85 4.85 0 0 1-1.01-.06z"/>
+                    </svg>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs font-bold">TikTok</p>
+                    <p className="text-[10px] text-muted-foreground">Copy caption</p>
+                  </div>
+                </button>
+
+                {/* Instagram */}
+                <button
+                  onClick={handleShareInstagram}
+                  className="flex flex-col items-center gap-2 p-3 rounded-xl border border-border/40 bg-muted/20 hover:bg-muted/40 hover:border-pink-500/30 transition-all group"
+                >
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <svg viewBox="0 0 24 24" fill="white" className="w-5 h-5">
+                      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                    </svg>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs font-bold">Instagram</p>
+                    <p className="text-[10px] text-muted-foreground">Copy caption</p>
+                  </div>
+                </button>
+
+                {/* Twitter/X */}
+                <button
+                  onClick={handleShareTwitter}
+                  className="flex flex-col items-center gap-2 p-3 rounded-xl border border-border/40 bg-muted/20 hover:bg-muted/40 hover:border-sky-500/30 transition-all group"
+                >
+                  <div className="w-9 h-9 rounded-full bg-black flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <svg viewBox="0 0 24 24" fill="white" className="w-4 h-4">
+                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.741l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                    </svg>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs font-bold">Twitter / X</p>
+                    <p className="text-[10px] text-muted-foreground">Open tweet</p>
+                  </div>
+                </button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                💡 TikTok & Instagram copy the caption to your clipboard — just open the app and paste it when creating a post.
               </p>
             </div>
           </div>

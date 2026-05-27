@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { BuyCreditsModal } from '@/components/features/BuyCreditsModal';
+import { useReferralNotifications } from '@/hooks/useReferralNotifications';
 
 interface Conversation {
   id: string;
@@ -41,6 +42,7 @@ export function Sidebar({ onClose }: SidebarProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [credits, setCredits] = useState(0);
   const [showBuyCredits, setShowBuyCredits] = useState(false);
+  const { newReferralCount, clearNotifications } = useReferralNotifications();
 
   useEffect(() => {
     if (user) {
@@ -294,13 +296,22 @@ export function Sidebar({ onClose }: SidebarProps) {
           <Button
             variant="ghost"
             size="sm"
-            className="flex-1"
+            className="flex-1 relative"
             onClick={() => {
+              clearNotifications();
               navigate('/app/settings');
               onClose?.();
             }}
           >
             <SettingsIcon className="h-4 w-4" />
+            {newReferralCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-green-500 text-[8px] font-black text-white items-center justify-center">
+                  {newReferralCount > 9 ? '9+' : newReferralCount}
+                </span>
+              </span>
+            )}
           </Button>
           <Button
             variant="ghost"
