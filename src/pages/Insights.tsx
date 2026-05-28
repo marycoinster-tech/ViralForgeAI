@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+
+import { useState, useEffect, useCallback } from 'react'; // Added useCallback
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
@@ -6,12 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { FunctionsHttpError } from '@supabase/supabase-js';
+
 import {
   TrendingUp, BarChart3, Flame, Loader2, RefreshCw,
   AlertTriangle, ChevronRight, Swords, Zap, Clock,
-  Target, Brain, ArrowUp, ArrowDown, Minus, Shield,
-  Lightbulb, Radio, CheckCircle2, XCircle
+  Target, Brain, ArrowUp, ArrowDown, Minus,
+  Lightbulb, Radio
 } from 'lucide-react';
 
 const NICHES = ['anime', 'motivation', 'money', 'dating', 'gym', 'ai & tech', 'storytime', 'fashion', 'gaming', 'beauty', 'food', 'travel'];
@@ -169,48 +170,62 @@ export function Insights() {
   const [expandedTrend, setExpandedTrend] = useState<string | null>(null);
   const [userTimezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
 
-  // Auto-load analytics on mount with real data
+  const loadTrends = useCallback(async () => { // Wrapped in useCallback
+    setLoadingTrends(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-insights', {
+        body: { action: 'trend_signals', niche: niche || undefined, platform },
+      });
+      if (error) {
+        let msg = error.message;
+        try {
+          // Changed `(error as any).context?.text()` to `await (error as any).context?.text()`
+          const text = await (error as any).context?.text();
+          if (text) msg = text;
+        } catch { /**/ }
+        toast({ title: 'Failed to load trends', description: msg, variant: 'destructive' });
+      } else if (data) {
+        setTrendsData(data);
+      }
+    } catch (err: any) {
+      console.error('loadTrends error:', err);
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setLoadingTrends(false);
+    }
+  }, [niche, platform, toast]); // Added dependencies
+
+  const loadAnalytics = useCallback(async () => { // Wrapped in useCallback
+    setLoadingAnalytics(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-insights', {
+        body: { action: 'predictive_analytics', niche: niche || undefined, timezone: userTimezone },
+      });
+      if (error) {
+        let msg = error.message;
+        try {
+          // Changed `(error as any).context?.text()` to `await (error as any).context?.text()`
+          const text = await (error as any).context?.text();
+          if (text) msg = text;
+        } catch { /**/ }
+        toast({ title: 'Failed to load analytics', description: msg, variant: 'destructive' });
+      } else if (data) {
+        setAnalyticsData(data);
+      }
+    } catch (err: any) {
+      console.error('loadAnalytics error:', err);
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setLoadingAnalytics(false);
+    }
+  }, [niche, userTimezone, toast]); // Added dependencies
+
+  // Auto-load analytics when switching to that tab
   useEffect(() => {
-    if (activeTab === 'analytics' && !analyticsData) {
+    if (activeTab === 'analytics' && !analyticsData && !loadingAnalytics) {
       loadAnalytics();
     }
-  }, [activeTab]);
-
-  const loadTrends = async () => {
-    setLoadingTrends(true);
-    const { data, error } = await supabase.functions.invoke('generate-insights', {
-      body: { action: 'trend_signals', niche: niche || undefined, platform },
-    });
-
-    if (error) {
-      let msg = error.message;
-      if (error instanceof FunctionsHttpError) {
-        try { const t = await error.context?.text(); msg = t || msg; } catch { /**/ }
-      }
-      toast({ title: 'Failed to load trends', description: msg, variant: 'destructive' });
-    } else {
-      setTrendsData(data);
-    }
-    setLoadingTrends(false);
-  };
-
-  const loadAnalytics = async () => {
-    setLoadingAnalytics(true);
-    const { data, error } = await supabase.functions.invoke('generate-insights', {
-      body: { action: 'predictive_analytics', niche: niche || undefined, timezone: userTimezone },
-    });
-
-    if (error) {
-      let msg = error.message;
-      if (error instanceof FunctionsHttpError) {
-        try { const t = await error.context?.text(); msg = t || msg; } catch { /**/ }
-      }
-      toast({ title: 'Failed to load analytics', description: msg, variant: 'destructive' });
-    } else {
-      setAnalyticsData(data);
-    }
-    setLoadingAnalytics(false);
-  };
+  }, [activeTab, analyticsData, loadingAnalytics, loadAnalytics]); // Corrected dependencies for useEffect
 
   const handleTabChange = (tab: 'trends' | 'analytics') => {
     setActiveTab(tab);
@@ -500,7 +515,27 @@ export function Insights() {
                 </div>
               )}
 
-              {!loadingAnalytics && analyticsData && (
+              {!loadingAnalytics && !analyticsData && (
+            <div className="glass-card p-12 text-center space-y-4">
+              <div className="flex justify-center">
+                <div className="p-4 rounded-full bg-primary/10">
+                  <BarChart3 className="h-8 w-8 text-primary" />
+                </div>
+              </div>
+              <div>
+                <h3 className="font-bold text-lg mb-1">Predictive Analytics</h3>
+                <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                  AI analyzes your real usage data to predict which content formats will perform best and when to post.
+                </p>
+              </div>
+              <Button onClick={loadAnalytics} disabled={loadingAnalytics} className="gap-2">
+                <BarChart3 className="h-4 w-4" />
+                Load Analytics
+              </Button>
+            </div>
+          )}
+
+          {!loadingAnalytics && analyticsData && (
                 <div className="space-y-5">
                   {/* Real stats bar */}
                   <div className="glass-card p-4 border border-primary/20 bg-gradient-to-r from-primary/5 to-accent/5">
