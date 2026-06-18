@@ -240,7 +240,7 @@ Be specific and detailed. This is for content strategy analysis.`
     // Build system prompt with enhanced intelligence and context awareness
     const systemPrompt = `You are ViralForge AI, an exceptionally intelligent AI assistant and expert viral content strategist for Gen Z creators.
 
-🎬 **YOU CAN GENERATE AI VIDEOS!** Use the /video command to create 15-second AI videos with Sora & Veo models.
+🖼️ **YOU CAN GENERATE AI THUMBNAILS!** Users can click the image button in chat to describe a thumbnail for their video.
 
 The user's name is ${username}. Chat with them naturally like a brilliant, insightful friend who truly understands content creation.
 ${timezone ? `\nUser's timezone: ${timezone}${country ? ` (${country})` : ''}` : ''}
@@ -308,24 +308,12 @@ Match the user's language style perfectly.
 - Recommend visuals and posting strategy
 - **ALWAYS include optimal posting time based on timezone**
 
-**Mode 4: AI Video Generation** (When user wants AI videos)
-- You CAN generate AI videos up to 15 seconds
-- Styles: Realistic, cartoon, anime, 3D
-- Formats: Landscape (16:9), Portrait (9:16), Square (1:1)
-- When user asks to generate/create a video, respond with:
-
-"I can create that for you! Use this command:
-
-\`/video [your description] [duration]s [format]\`
-
-Example:
-\`/video A cat playing with yarn in slow motion 10s portrait\`
-
-Just paste that command and I'll generate your video! 🎬"
-
-- Be specific about what they should type
-- Encourage them to describe exactly what they want to see
-- Remind them: max 15 seconds, be detailed in description
+**Mode 4: Thumbnail Generation** (When user wants to generate a thumbnail)
+- Tell users to click the 🖼️ image button in the chat input to switch to Thumbnail Mode
+- Then describe their thumbnail concept (mood, colors, subject, style)
+- Daily limit: 4 thumbnails per day
+- Example: "dark neon gym athlete, fire background, dramatic lighting"
+- Encourage vivid, specific descriptions for best results
 
 📱 **TIMEZONE & POSTING INTELLIGENCE**
 
@@ -439,83 +427,6 @@ Now respond intelligently based on what the user actually needs.`;
           }
         }
       }
-    }
-
-    // Detect if user wants video generation
-    const videoKeywords = ['generate video', 'create video', 'make video', 'ai video', 'video script'];
-    const isVideoRequest = customTopic && videoKeywords.some(kw => customTopic.toLowerCase().includes(kw));
-
-    // If video generation requested, provide guidance
-    if (isVideoRequest) {
-      const videoGuidance = `I can help you generate AI videos! Here's how:
-
-🎬 **Video Generation Commands:**
-
-1. **Simple video:**
-   "Generate a 10-second video of a cat playing with a ball"
-
-2. **Specify style:**
-   "Create a 15-second cartoon video of a baby laughing"
-
-3. **Real human video:**
-   "Make a 12-second realistic video of a person walking in a park"
-
-**Features:**
-- Max duration: 15 seconds
-- Formats: Landscape (16:9), Portrait (9:16), Square (1:1)
-- Styles: Realistic, cartoon, anime, 3D animation
-- Uses: Sora & Veo AI models
-
-**To generate a video, use this format:**
-\`\`\`
-/video [description] [duration]s [format]
-\`\`\`
-
-Example:
-\`\`\`
-/video A cat playing with yarn in slow motion 10s portrait
-\`\`\`
-
-💡 **Pro tip:** Be specific about what you want to see - the more detail, the better the result!
-
-Ready to create your first AI video? Just use the /video command! 🚀`;
-
-      // Send response directly
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          // Stream the guidance message
-          for (const char of videoGuidance) {
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ content: char })}\n\n`)
-            );
-          }
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-          controller.close();
-        },
-      });
-
-      // Save messages
-      await supabaseClient.from('messages').insert({
-        conversation_id: conversationId,
-        role: 'user',
-        content: customTopic,
-      });
-
-      await supabaseClient.from('messages').insert({
-        conversation_id: conversationId,
-        role: 'assistant',
-        content: videoGuidance,
-      });
-
-      return new Response(stream, {
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
     }
 
     // Build current user message

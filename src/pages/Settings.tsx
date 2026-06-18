@@ -14,7 +14,7 @@ import {
   Loader2,
   AlertCircle,
   Check,
-  Film,
+  Image,
   Sparkles,
   Receipt,
   ShoppingCart,
@@ -515,52 +515,48 @@ export function Settings() {
           </div>
         </div>
 
-        {/* Video Generation Section */}
+        {/* Thumbnail Generation Section */}
         <div className="glass-card p-6 space-y-4">
           <h2 className="text-lg font-bold flex items-center gap-2">
-            <Film className="h-5 w-5 text-primary" />
-            AI Video Generation
+            <Image className="h-5 w-5 text-primary" />
+            AI Thumbnail Generator
           </h2>
 
           <div className="space-y-4">
-            <div className="flex items-start gap-3 p-4 rounded-lg bg-primary/5 border border-primary/20">
-              <Sparkles className="h-5 w-5 text-primary mt-0.5" />
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-violet-500/5 border border-violet-500/20">
+              <Sparkles className="h-5 w-5 text-violet-400 mt-0.5" />
               <div className="flex-1 space-y-1">
-                <h3 className="text-sm font-semibold">Generate AI Videos in Chat</h3>
+                <h3 className="text-sm font-semibold">Generate AI Thumbnails in Chat</h3>
                 <p className="text-xs text-muted-foreground">
-                  Create stunning AI videos directly in your conversations. Click the video button in the chat input!
+                  Click the <strong className="text-violet-400">🖼️ image button</strong> in chat to switch to Thumbnail Mode, then describe the thumbnail you want for your video.
                 </p>
               </div>
             </div>
 
             <div className="space-y-3">
-              <h3 className="text-sm font-medium">Pricing & Limits</h3>
+              <h3 className="text-sm font-medium">Limits & Tips</h3>
               <div className="grid gap-2 text-xs">
                 <div className="flex items-center gap-2">
-                  <div className="w-1 h-1 rounded-full bg-primary" />
-                  <span>Cost: <strong>10 credits per video</strong></span>
+                  <div className="w-1 h-1 rounded-full bg-violet-400" />
+                  <span>Daily limit: <strong>4 thumbnails per day</strong> (resets at midnight)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-1 h-1 rounded-full bg-primary" />
-                  <span>Duration: <strong>Sora 2: 4/8/12s • Veo 3.1: 4-28s</strong></span>
+                  <div className="w-1 h-1 rounded-full bg-violet-400" />
+                  <span>Describe your thumbnail in detail — include mood, colors, subject</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-1 h-1 rounded-full bg-primary" />
-                  <span>Formats: Landscape (16:9), Portrait (9:16), Square (1:1)</span>
+                  <div className="w-1 h-1 rounded-full bg-violet-400" />
+                  <span>Example: <em>"dark neon gym athlete, red fire background, dramatic lighting"</em></span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-1 h-1 rounded-full bg-primary" />
-                  <span>Styles: Realistic (Sora 2), Cartoon (Veo 3.1)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-1 h-1 rounded-full bg-primary" />
-                  <span>Daily Limit: 3 videos per day</span>
+                  <div className="w-1 h-1 rounded-full bg-violet-400" />
+                  <span>Free to use — no credits deducted</span>
                 </div>
               </div>
             </div>
 
             <p className="text-xs text-muted-foreground italic">
-              💡 Tip: Toggle video mode in chat, set your preferences, and describe your video. The AI handles the rest!
+              💡 Tip: Generate your hooks + scripts first, then switch to Thumbnail Mode to create a matching visual.
             </p>
           </div>
         </div>

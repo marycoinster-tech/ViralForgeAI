@@ -462,6 +462,111 @@ Respond ONLY with this exact JSON (no markdown):
       });
     }
 
+    // ─── HASHTAG GENERATOR ────────────────────────────────────────────────────
+    if (action === 'hashtag_generator') {
+      const { topic, platform, niche } = body;
+      const today = new Date();
+      const month = today.toLocaleString('en-US', { month: 'long' });
+      const year = today.getFullYear();
+      const dayOfWeek = today.toLocaleString('en-US', { weekday: 'long' });
+      const weekNumber = Math.ceil(today.getDate() / 7);
+
+      const prompt = `You are a hashtag intelligence analyst for short-form content creators. You have deep real-time knowledge of trending hashtags across TikTok, Instagram Reels, and YouTube Shorts.
+
+Today is ${dayOfWeek}, ${month} ${today.getDate()}, ${year} (week ${weekNumber} of the month).
+Content topic: "${topic}"
+Platform focus: ${platform || 'TikTok'}
+${niche ? `Creator niche: ${niche}` : ''}
+
+Your task: Generate hashtag intelligence based on REAL platform trends for ${month} ${year}.
+
+Analyze:
+1. **PRIMARY hashtags** — High-reach tags (1M+ posts) that are currently surging for this topic right now
+2. **NICHE hashtags** — Mid-range tags (50K-500K posts) specific to the topic with less competition
+3. **COMMUNITY hashtags** — Challenge, trend, and community tags driving engagement loops in ${month} ${year}
+4. **AVOID list** — Tags that are oversaturated or declining right now
+
+For each hashtag calculate:
+- viralScore: 0-100 (how likely it is to spike views RIGHT NOW based on current trend momentum)
+- trend: RISING (gaining traction), STABLE (consistent performer), DECLINING (losing momentum)
+- peakTime: Best time of day to post with this tag (e.g., "7-9pm weekdays")
+- estimatedViews: Estimated view range per post using this tag (e.g., "50K-200K")
+- competition: LOW / MEDIUM / HIGH (how saturated the tag is)
+- category: What type of tag this is (e.g., "Trending challenge", "Niche community", "Broad discovery")
+- reason: ONE specific sentence explaining why this tag will work for this topic RIGHT NOW
+
+Consider for ${month} ${year}:
+- Current seasonal trends (summer content, back-to-school, holidays, etc.)
+- Platform algorithm preferences as of 2026
+- Cross-platform trending patterns
+- Gen Z content consumption patterns in 2026
+- Hashtag saturation cycles
+
+Best combination strategy:
+- Mix 3-5 primary + 4-6 niche + 2-3 community tags
+- Recommend optimal total count per platform
+- Flag any tags to absolutely avoid
+
+Respond ONLY with this exact JSON (no markdown):
+{
+  "generatedAt": "${today.toISOString()}",
+  "topic": "${topic}",
+  "platform": "${platform || 'TikTok'}",
+  "primaryHashtags": [
+    {
+      "tag": "hashtag without #",
+      "viralScore": 87,
+      "trend": "RISING",
+      "peakTime": "7-10pm weekdays",
+      "estimatedViews": "100K-500K",
+      "competition": "HIGH",
+      "category": "Broad discovery",
+      "reason": "Specific reason why this is spiking for this topic right now"
+    }
+  ],
+  "nicheHashtags": [...same structure, 6-8 tags],
+  "communityHashtags": [...same structure, 4-5 tags],
+  "avoidHashtags": [
+    { "tag": "oversaturated", "reason": "Why to avoid this tag right now" }
+  ],
+  "optimalCount": 12,
+  "bestCombination": ["tag1", "tag2", "tag3", "...up to 12 tags"],
+  "strategyNote": "One paragraph explaining the hashtag strategy — why this specific combination will maximize reach for this topic on this platform right now",
+  "trendingContext": "2-3 sentences describing what's trending on ${platform || 'TikTok'} in ${month} ${year} that's relevant to this topic — cultural moments, viral formats, algorithm changes"
+}`;
+
+      const aiRes = await fetch(`${ONSPACE_AI_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${ONSPACE_AI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-3-flash-preview',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.8,
+          max_tokens: 4000,
+        }),
+      });
+
+      if (!aiRes.ok) throw new Error(`AI error: ${await aiRes.text()}`);
+
+      const aiData = await aiRes.json();
+      const raw = aiData.choices?.[0]?.message?.content ?? '';
+
+      let parsed: any;
+      try {
+        const clean = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+        parsed = JSON.parse(clean);
+      } catch {
+        throw new Error('Failed to parse hashtag response');
+      }
+
+      return new Response(JSON.stringify(parsed), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response(JSON.stringify({ error: 'Unknown action' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

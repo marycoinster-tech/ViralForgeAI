@@ -3,8 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { NICHES, VIBES, GOALS, PLATFORMS } from '@/constants/options';
 import { GeneratorInput, Niche, Vibe, Goal, Platform } from '@/types/content';
-import { Sparkles, ChevronDown, Mic, Square, Pause, Play, Video } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import { Sparkles, ChevronDown, Mic, Square, Pause, Play, Image } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   Select,
@@ -16,14 +15,13 @@ import {
 
 interface InputBarProps {
   onGenerate: (input: GeneratorInput) => void;
-  onVideoGenerate?: (params: { prompt: string; duration: number; aspectRatio: '16:9' | '9:16' | '1:1'; style: string }) => void;
   disabled?: boolean;
-  videoMode?: boolean;
-  onVideoModeToggle?: () => void;
   defaultNiche?: string;
+  dailyImageCount?: number;
+  dailyImageLimit?: number;
 }
 
-export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = false, onVideoModeToggle, defaultNiche }: InputBarProps) {
+export function InputBar({ onGenerate, disabled, defaultNiche, dailyImageCount = 0, dailyImageLimit = 4 }: InputBarProps) {
   const { toast } = useToast();
   const [customTopic, setCustomTopic] = useState('');
   const [selectedNiche, setSelectedNiche] = useState<Niche>((defaultNiche as Niche) || 'anime');
@@ -31,9 +29,7 @@ export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = fa
   const [selectedGoal, setSelectedGoal] = useState<Goal>('followers');
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('tiktok');
   const [showOptions, setShowOptions] = useState(false);
-  const [videoStyle, setVideoStyle] = useState<'realistic' | 'cartoon'>('realistic');
-  const [videoDuration, setVideoDuration] = useState(8);
-  const [videoAspectRatio, setVideoAspectRatio] = useState<'16:9' | '9:16' | '1:1'>('9:16');
+  const [thumbnailMode, setThumbnailMode] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
@@ -46,20 +42,26 @@ export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = fa
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recognitionRef = useRef<any | null>(null);
 
+  const imagesLeft = dailyImageLimit - dailyImageCount;
+
   const handleSubmit = () => {
     if (!customTopic.trim() && !showOptions) return;
 
-    if (videoMode && onVideoGenerate) {
-      // Video generation mode
-      onVideoGenerate({
-        prompt: customTopic.trim(),
-        duration: videoDuration,
-        aspectRatio: videoAspectRatio,
-        style: videoStyle,
+    if (thumbnailMode) {
+      if (imagesLeft <= 0) {
+        toast({ title: 'Daily thumbnail limit reached', description: `You can generate ${dailyImageLimit} thumbnails per day.`, variant: 'destructive' });
+        return;
+      }
+      // Prepend /thumbnail marker so Chat.tsx can detect it
+      onGenerate({
+        niche: selectedNiche,
+        vibe: selectedVibe,
+        goal: selectedGoal,
+        platform: selectedPlatform,
+        customTopic: `[THUMBNAIL REQUEST] ${customTopic.trim()}`,
       });
       setCustomTopic('');
     } else {
-      // Regular chat mode
       onGenerate({
         niche: selectedNiche,
         vibe: selectedVibe,
@@ -78,282 +80,126 @@ export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = fa
     }
   };
 
-  // Check speech recognition support on mount
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const supported = !!SpeechRecognition;
-    setIsSpeechSupported(supported);
-    
-    if (!supported) {
-      console.log('Speech recognition not supported on this browser/device');
-    }
+    setIsSpeechSupported(!!SpeechRecognition);
   }, []);
 
-  // Cleanup audio visualization on unmount
   useEffect(() => {
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (audioContextRef.current) audioContextRef.current.close();
     };
   }, []);
 
-  // Audio visualization - reactive to actual voice
   const startAudioVisualization = async (stream: MediaStream) => {
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const analyser = audioContext.createAnalyser();
       const source = audioContext.createMediaStreamSource(stream);
-      
-      analyser.fftSize = 512; // Higher resolution for better visualization
-      analyser.smoothingTimeConstant = 0.3; // Smoother transitions
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.3;
       source.connect(analyser);
-      
       audioContextRef.current = audioContext;
       analyserRef.current = analyser;
-      
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      
       const updateLevel = () => {
         if (!analyserRef.current || isPaused) {
-          // Keep animation going even when paused, but with minimal values
-          if (isPaused) {
-            setAudioLevel(0);
-            setFrequencyBars(new Array(20).fill(0));
-          }
-          if (!isPaused) {
-            animationFrameRef.current = requestAnimationFrame(updateLevel);
-          }
+          if (isPaused) { setAudioLevel(0); setFrequencyBars(new Array(20).fill(0)); }
+          if (!isPaused) animationFrameRef.current = requestAnimationFrame(updateLevel);
           return;
         }
-        
         analyserRef.current.getByteFrequencyData(dataArray);
-        
-        // Get overall volume/amplitude - this drives the ENTIRE wave
         const overallLevel = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-        const normalizedLevel = overallLevel / 255; // 0-1
-        
-        // Create bars that all move together based on overall volume
-        // Add slight variation per bar to keep it interesting
+        const normalizedLevel = overallLevel / 255;
         const bars: number[] = [];
         for (let i = 0; i < 20; i++) {
-          // Each bar gets the overall level + small random variation
-          const variation = Math.random() * 0.2; // 20% variation
-          const barLevel = normalizedLevel * (0.9 + variation);
-          bars.push(Math.min(1, barLevel));
+          bars.push(Math.min(1, normalizedLevel * (0.9 + Math.random() * 0.2)));
         }
-        
-        // Update state
         setAudioLevel(normalizedLevel);
         setFrequencyBars(bars);
-        
         animationFrameRef.current = requestAnimationFrame(updateLevel);
       };
-      
       updateLevel();
     } catch (error) {
       console.error('Audio visualization error:', error);
     }
   };
 
-  // Voice recording using Web Speech API
   const startVoiceRecording = async () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    
     if (!SpeechRecognition) {
-      toast({
-        title: 'Voice input not supported',
-        description: 'Your browser doesn\'t support voice input. Please type instead or use Chrome on Android.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Voice input not supported', description: 'Your browser doesn\'t support voice input. Please type instead or use Chrome on Android.', variant: 'destructive' });
       return;
     }
-
     try {
-      // Request microphone permission
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
       await startAudioVisualization(stream);
-
       const recognition = new SpeechRecognition();
       recognitionRef.current = recognition;
-
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
       recognition.maxAlternatives = 1;
-
-      recognition.onstart = () => {
-        setIsRecording(true);
-        setIsPaused(false);
-      };
-
+      recognition.onstart = () => { setIsRecording(true); setIsPaused(false); };
       recognition.onresult = (event: any) => {
-        let interimTranscript = '';
         let finalTranscript = '';
-
         for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript + ' ';
-          } else {
-            interimTranscript += transcript;
-          }
+          if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript + ' ';
         }
-
-        if (finalTranscript) {
-          setCustomTopic((prev) => prev + finalTranscript);
-        }
+        if (finalTranscript) setCustomTopic((prev) => prev + finalTranscript);
       };
-
-      recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
-        stopVoiceRecording();
-      };
-
-      recognition.onend = () => {
-        // Only stop if not paused (pause will restart recognition)
-        if (!isPaused) {
-          stopVoiceRecording();
-        }
-      };
-
+      recognition.onerror = () => stopVoiceRecording();
+      recognition.onend = () => { if (!isPaused) stopVoiceRecording(); };
       recognition.start();
       mediaRecorderRef.current = recognition;
     } catch (error: any) {
-      console.error('Failed to start voice recording:', error);
-      
       let errorMessage = 'Could not access microphone.';
-      if (error.name === 'NotAllowedError') {
-        errorMessage = 'Microphone permission denied. Please allow microphone access in your browser settings.';
-      } else if (error.name === 'NotFoundError') {
-        errorMessage = 'No microphone found. Please connect a microphone and try again.';
-      }
-      
-      toast({
-        title: 'Voice input failed',
-        description: errorMessage,
-        variant: 'destructive',
-      });
-      
-      // Cleanup on error
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach(track => track.stop());
-        mediaStreamRef.current = null;
-      }
+      if (error.name === 'NotAllowedError') errorMessage = 'Microphone permission denied.';
+      else if (error.name === 'NotFoundError') errorMessage = 'No microphone found.';
+      toast({ title: 'Voice input failed', description: errorMessage, variant: 'destructive' });
+      if (mediaStreamRef.current) { mediaStreamRef.current.getTracks().forEach(t => t.stop()); mediaStreamRef.current = null; }
     }
   };
 
   const pauseVoiceRecording = () => {
     if (recognitionRef.current && !isPaused) {
-      try {
-        recognitionRef.current.stop();
-        setIsPaused(true);
-        setAudioLevel(0);
-        setFrequencyBars(new Array(20).fill(0));
-      } catch (error) {
-        console.error('Error pausing recognition:', error);
-      }
+      try { recognitionRef.current.stop(); } catch (e) { /**/ }
+      setIsPaused(true);
+      setAudioLevel(0);
+      setFrequencyBars(new Array(20).fill(0));
     }
   };
 
   const resumeVoiceRecording = () => {
-    if (isPaused && isRecording) {
-      setIsPaused(false);
-      
-      // Restart speech recognition
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (!SpeechRecognition) return;
-      
-      const recognition = new SpeechRecognition();
-      recognitionRef.current = recognition;
-
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-      recognition.maxAlternatives = 1;
-
-      recognition.onresult = (event: any) => {
-        let finalTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript + ' ';
-          }
-        }
-        if (finalTranscript) {
-          setCustomTopic((prev) => prev + finalTranscript);
-        }
-      };
-
-      recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
-        stopVoiceRecording();
-      };
-
-      recognition.start();
-      mediaRecorderRef.current = recognition;
-      
-      // Resume audio visualization
-      if (analyserRef.current && animationFrameRef.current === null) {
-        const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-        const updateLevel = () => {
-          if (!analyserRef.current || isPaused) return;
-          
-          analyserRef.current.getByteFrequencyData(dataArray);
-          const bandSize = Math.floor(dataArray.length / 20);
-          const bars: number[] = [];
-          
-          for (let i = 0; i < 20; i++) {
-            const start = i * bandSize;
-            const end = start + bandSize;
-            const band = dataArray.slice(start, end);
-            const average = band.reduce((a, b) => a + b, 0) / band.length;
-            bars.push(average / 255);
-          }
-          
-          const overallLevel = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-          setAudioLevel(overallLevel / 255);
-          setFrequencyBars(bars);
-          
-          animationFrameRef.current = requestAnimationFrame(updateLevel);
-        };
-        updateLevel();
+    if (!isPaused || !isRecording) return;
+    setIsPaused(false);
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognition.onresult = (event: any) => {
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript + ' ';
       }
-    }
+      if (finalTranscript) setCustomTopic((prev) => prev + finalTranscript);
+    };
+    recognition.onerror = () => stopVoiceRecording();
+    recognition.start();
+    mediaRecorderRef.current = recognition;
   };
 
   const stopVoiceRecording = () => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (error) {
-        console.error('Error stopping recognition:', error);
-      }
-      recognitionRef.current = null;
-    }
-    
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current = null;
-    }
-    
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-    
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(track => track.stop());
-      mediaStreamRef.current = null;
-    }
-    
+    if (recognitionRef.current) { try { recognitionRef.current.stop(); } catch { /**/ } recognitionRef.current = null; }
+    if (mediaRecorderRef.current) mediaRecorderRef.current = null;
+    if (animationFrameRef.current) { cancelAnimationFrame(animationFrameRef.current); animationFrameRef.current = null; }
+    if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
+    if (mediaStreamRef.current) { mediaStreamRef.current.getTracks().forEach(t => t.stop()); mediaStreamRef.current = null; }
     setIsRecording(false);
     setIsPaused(false);
     setAudioLevel(0);
@@ -361,11 +207,8 @@ export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = fa
   };
 
   const toggleVoiceRecording = () => {
-    if (isRecording) {
-      stopVoiceRecording();
-    } else {
-      startVoiceRecording();
-    }
+    if (isRecording) stopVoiceRecording();
+    else startVoiceRecording();
   };
 
   return (
@@ -386,118 +229,52 @@ export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = fa
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Niche</label>
               <Select value={selectedNiche} onValueChange={(v) => setSelectedNiche(v as Niche)}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {NICHES.map((n) => (
-                    <SelectItem key={n.value} value={n.value}>
-                      {n.emoji} {n.label}
-                    </SelectItem>
-                  ))}
+                  {NICHES.map((n) => <SelectItem key={n.value} value={n.value}>{n.emoji} {n.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Vibe</label>
               <Select value={selectedVibe} onValueChange={(v) => setSelectedVibe(v as Vibe)}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {VIBES.map((v) => (
-                    <SelectItem key={v.value} value={v.value}>
-                      {v.label}
-                    </SelectItem>
-                  ))}
+                  {VIBES.map((v) => <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Goal</label>
               <Select value={selectedGoal} onValueChange={(v) => setSelectedGoal(v as Goal)}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {GOALS.map((g) => (
-                    <SelectItem key={g.value} value={g.value}>
-                      {g.icon} {g.label}
-                    </SelectItem>
-                  ))}
+                  {GOALS.map((g) => <SelectItem key={g.value} value={g.value}>{g.icon} {g.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Platform</label>
               <Select value={selectedPlatform} onValueChange={(v) => setSelectedPlatform(v as Platform)}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {PLATFORMS.map((p) => (
-                    <SelectItem key={p.value} value={p.value}>
-                      {p.label}
-                    </SelectItem>
-                  ))}
+                  {PLATFORMS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
           </div>
         )}
 
-        {/* Video Options (when video mode is active) */}
-        {videoMode && (
-          <div className="grid grid-cols-3 gap-2 p-3 glass rounded-xl animate-fade-in">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Style</label>
-              <Select value={videoStyle} onValueChange={(v) => setVideoStyle(v as 'realistic' | 'cartoon')}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="realistic">🎬 Realistic</SelectItem>
-                  <SelectItem value="cartoon">🎨 Cartoon</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
-                Duration {videoStyle === 'realistic' ? '(4/8/12s)' : '(4-28s)'}
-              </label>
-              <Input
-                type="number"
-                min={4}
-                max={videoStyle === 'realistic' ? 12 : 28}
-                step={4}
-                value={videoDuration}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value) || 4;
-                  const maxDur = videoStyle === 'realistic' ? 12 : 28;
-                  setVideoDuration(Math.min(maxDur, Math.max(4, val)));
-                }}
-                className="h-9 text-xs"
-                placeholder="8"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Format</label>
-              <Select value={videoAspectRatio} onValueChange={(v) => setVideoAspectRatio(v as '16:9' | '9:16' | '1:1')}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="16:9">📺 Landscape</SelectItem>
-                  <SelectItem value="9:16">📱 Portrait</SelectItem>
-                  <SelectItem value="1:1">⬜ Square</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        {/* Thumbnail Mode info */}
+        {thumbnailMode && (
+          <div className="flex items-center gap-2 p-2.5 glass rounded-xl animate-fade-in">
+            <Image className="h-4 w-4 text-violet-400 shrink-0" />
+            <p className="text-xs text-muted-foreground flex-1">
+              Describe your thumbnail — e.g. <span className="text-violet-400 font-semibold">"gym motivation dark background athlete"</span>
+            </p>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${imagesLeft > 0 ? 'text-violet-400 bg-violet-400/10' : 'text-red-400 bg-red-400/10'}`}>
+              {imagesLeft}/{dailyImageLimit} left today
+            </span>
           </div>
         )}
 
@@ -505,7 +282,9 @@ export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = fa
         <div className="flex gap-2 items-end">
           <div className="flex-1 relative">
             <Textarea
-              placeholder={videoMode ? "Describe your video... (e.g., 'A cat playing with yarn')" : "Drop a topic, vibe, or niche... (or just hit generate)"}
+              placeholder={thumbnailMode
+                ? 'Describe your thumbnail concept...'
+                : 'Drop a topic, vibe, or niche... (or just hit generate)'}
               value={customTopic}
               onChange={(e) => setCustomTopic(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -513,53 +292,45 @@ export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = fa
               className="resize-none min-h-[56px] max-h-[200px] pr-12 rounded-2xl"
               rows={1}
             />
-            {/* Voice Button Inside Textarea */}
-            {isSpeechSupported && !videoMode && (
+            {/* Voice Button */}
+            {isSpeechSupported && !thumbnailMode && (
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 onClick={toggleVoiceRecording}
                 disabled={disabled}
-                className={`absolute right-2 bottom-2 h-8 w-8 ${
-                  isRecording ? 'text-destructive animate-pulse' : ''
-                }`}
-                title={isSpeechSupported ? 'Click to use voice input' : 'Voice input not supported on this browser'}
+                className={`absolute right-2 bottom-2 h-8 w-8 ${isRecording ? 'text-destructive animate-pulse' : ''}`}
               >
-                {isRecording ? (
-                  <Square className="h-4 w-4" />
-                ) : (
-                  <Mic className="h-4 w-4" />
-                )}
+                {isRecording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
               </Button>
             )}
           </div>
-          
-          {/* Video Mode Toggle */}
-          {onVideoModeToggle && (
-            <Button
-              type="button"
-              variant={videoMode ? 'default' : 'outline'}
-              size="lg"
-              onClick={onVideoModeToggle}
-              disabled={disabled || isRecording}
-              className="px-4 h-14 rounded-2xl shrink-0"
-              title="Toggle AI video generation mode"
-            >
-              <Video className="h-5 w-5" />
-            </Button>
-          )}
+
+          {/* Thumbnail Toggle */}
+          <Button
+            type="button"
+            variant={thumbnailMode ? 'default' : 'outline'}
+            size="lg"
+            onClick={() => setThumbnailMode(!thumbnailMode)}
+            disabled={disabled || isRecording}
+            className={`px-4 h-14 rounded-2xl shrink-0 ${thumbnailMode ? 'bg-violet-600 hover:bg-violet-700 border-0' : 'border-violet-500/30 text-violet-400 hover:bg-violet-500/10'}`}
+            title="Generate AI thumbnail for your video"
+          >
+            <Image className="h-5 w-5" />
+          </Button>
+
           <Button
             onClick={handleSubmit}
-            disabled={disabled || isRecording || (videoMode && !customTopic.trim())}
+            disabled={disabled || isRecording || (thumbnailMode && !customTopic.trim())}
             size="lg"
             className="px-6 h-14 rounded-2xl shrink-0"
           >
-            {videoMode ? <Video className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+            <Sparkles className="h-5 w-5" />
           </Button>
         </div>
 
-        {/* Recording Indicator with Reactive Waveform */}
+        {/* Recording Indicator */}
         {isRecording && (
           <div className="space-y-3 animate-fade-in">
             <div className="flex items-center justify-center gap-3 py-2">
@@ -571,32 +342,20 @@ export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = fa
               </div>
               <div className="flex items-center gap-0.5 h-10">
                 {frequencyBars.map((level, i) => {
-                  // ALL bars move together based on volume
                   const baseHeight = 4;
                   const maxHeight = 40;
-                  // Height driven by overall volume (with slight per-bar variation)
-                  const height = isPaused 
-                    ? baseHeight 
-                    : Math.max(baseHeight, Math.min(maxHeight, level * maxHeight * 2));
-                  
+                  const height = isPaused ? baseHeight : Math.max(baseHeight, Math.min(maxHeight, level * maxHeight * 2));
                   return (
                     <div
                       key={i}
                       className="w-1 bg-gradient-to-t from-primary via-accent to-primary rounded-full transition-all duration-100 ease-out"
-                      style={{ 
-                        height: `${height}px`,
-                        opacity: isPaused ? 0.3 : 1
-                      }}
+                      style={{ height: `${height}px`, opacity: isPaused ? 0.3 : 1 }}
                     />
                   );
                 })}
               </div>
-              <span className="text-xs text-muted-foreground">
-                {isPaused ? 'Tap resume' : 'Speaking...'}
-              </span>
+              <span className="text-xs text-muted-foreground">{isPaused ? 'Tap resume' : 'Speaking...'}</span>
             </div>
-            
-            {/* Pause/Play Toggle & Stop Controls */}
             <div className="flex items-center justify-center gap-2">
               <Button
                 type="button"
@@ -605,19 +364,9 @@ export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = fa
                 onClick={isPaused ? resumeVoiceRecording : pauseVoiceRecording}
                 className={`h-9 w-9 ${isPaused ? 'border-primary/40 hover:bg-primary/10' : 'border-yellow-500/40 hover:bg-yellow-500/10'}`}
               >
-                {isPaused ? (
-                  <Play className="h-4 w-4" />
-                ) : (
-                  <Pause className="h-4 w-4" />
-                )}
+                {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={stopVoiceRecording}
-                className="h-9 px-4 border-destructive/40 hover:bg-destructive/10"
-              >
+              <Button type="button" size="sm" variant="outline" onClick={stopVoiceRecording} className="h-9 px-4 border-destructive/40 hover:bg-destructive/10">
                 Stop
               </Button>
             </div>
@@ -626,9 +375,9 @@ export function InputBar({ onGenerate, onVideoGenerate, disabled, videoMode = fa
 
         {!isRecording && (
           <p className="text-xs text-center text-muted-foreground">
-            {videoMode 
-              ? `${videoStyle === 'realistic' ? '🎬 Sora 2 (4/8/12s only)' : '🎨 Veo 3.1 (4-28s)'} • ${videoDuration}s ${videoAspectRatio} • Max 3/day` 
-              : `Press Enter to generate • Shift + Enter for new line${isSpeechSupported ? ' • Click mic for voice input' : ''}`
+            {thumbnailMode
+              ? `🖼️ AI Thumbnail Generator • ${imagesLeft}/${dailyImageLimit} images remaining today`
+              : `Press Enter to generate • Shift + Enter for new line${isSpeechSupported ? ' • Click mic for voice' : ''}`
             }
           </p>
         )}

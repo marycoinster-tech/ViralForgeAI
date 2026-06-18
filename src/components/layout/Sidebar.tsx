@@ -16,7 +16,8 @@ import {
   Swords,
   Dna,
   CalendarDays,
-  Radio
+  Radio,
+  Hash
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { BuyCreditsModal } from '@/components/features/BuyCreditsModal';
@@ -215,6 +216,19 @@ export function Sidebar({ onClose }: SidebarProps) {
           <Radio className="h-4 w-4 shrink-0" />
           <span className="text-sm font-semibold">Trend Signals</span>
           <span className="ml-auto text-[10px] font-bold bg-cyan-500/10 text-cyan-400 px-1.5 py-0.5 rounded-full">NEW</span>
+        </Link>
+        <Link
+          to="/app/hashtags"
+          onClick={onClose}
+          className={`flex items-center gap-3 p-2.5 rounded-lg transition-colors group ${
+            location.pathname === '/app/hashtags'
+              ? 'bg-violet-500/10 border border-violet-500/20 text-violet-400'
+              : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Hash className="h-4 w-4 shrink-0" />
+          <span className="text-sm font-semibold">Hashtag Intel</span>
+          <span className="ml-auto text-[10px] font-bold bg-violet-500/10 text-violet-400 px-1.5 py-0.5 rounded-full">NEW</span>
         </Link>
       </div>
 
