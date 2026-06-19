@@ -5,7 +5,6 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/lib/supabase';
-import { FunctionsHttpError } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
 
 import {
@@ -126,10 +125,7 @@ function HeatBar({ score }: { score: number }) {
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-1.5 bg-muted/40 rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-700"
-          style={{ width: `${score}%`, backgroundColor: color }}
-        />
+        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${score}%`, backgroundColor: color }} />
       </div>
       <span className="text-xs font-black w-8 text-right" style={{ color }}>{score}</span>
     </div>
@@ -156,6 +152,26 @@ function ConfidenceRing({ value, label }: { value: number; label: string }) {
   );
 }
 
+async function invokeInsights(action: string, params: Record<string, any>) {
+  const { data, error } = await supabase.functions.invoke('generate-insights', {
+    body: { action, ...params },
+  });
+
+  if (error) {
+    let msg = error.message || 'Request failed';
+    try {
+      const ctx = (error as any).context;
+      if (ctx && typeof ctx.text === 'function') {
+        const txt = await ctx.text();
+        if (txt) msg = txt;
+      }
+    } catch { /**/ }
+    throw new Error(msg);
+  }
+
+  return data;
+}
+
 export function Insights() {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -172,25 +188,11 @@ export function Insights() {
   const loadTrends = useCallback(async () => {
     setLoadingTrends(true);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-insights', {
-        body: { action: 'trend_signals', niche: niche || undefined, platform },
-      });
-      if (error) {
-        let msg = error.message;
-        if (error instanceof FunctionsHttpError) {
-          try {
-            const statusCode = error.context?.status ?? 500;
-            const textContent = await error.context?.text();
-            msg = `[${statusCode}] ${textContent || error.message}`;
-          } catch { /**/ }
-        }
-        toast({ title: 'Failed to load trends', description: msg, variant: 'destructive' });
-      } else if (data) {
-        setTrendsData(data);
-      }
+      const data = await invokeInsights('trend_signals', { niche: niche || undefined, platform });
+      setTrendsData(data);
     } catch (err: any) {
       console.error('loadTrends error:', err);
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: 'Failed to load trends', description: err.message, variant: 'destructive' });
     } finally {
       setLoadingTrends(false);
     }
@@ -199,36 +201,21 @@ export function Insights() {
   const loadAnalytics = useCallback(async () => {
     setLoadingAnalytics(true);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-insights', {
-        body: { action: 'predictive_analytics', niche: niche || undefined, timezone: userTimezone },
-      });
-      if (error) {
-        let msg = error.message;
-        if (error instanceof FunctionsHttpError) {
-          try {
-            const statusCode = error.context?.status ?? 500;
-            const textContent = await error.context?.text();
-            msg = `[${statusCode}] ${textContent || error.message}`;
-          } catch { /**/ }
-        }
-        toast({ title: 'Failed to load analytics', description: msg, variant: 'destructive' });
-      } else if (data) {
-        setAnalyticsData(data);
-      }
+      const data = await invokeInsights('predictive_analytics', { niche: niche || undefined, timezone: userTimezone });
+      setAnalyticsData(data);
     } catch (err: any) {
       console.error('loadAnalytics error:', err);
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: 'Failed to load analytics', description: err.message, variant: 'destructive' });
     } finally {
       setLoadingAnalytics(false);
     }
   }, [niche, userTimezone, toast]);
 
-  // Auto-load analytics when switching to that tab
   useEffect(() => {
     if (activeTab === 'analytics' && !analyticsData && !loadingAnalytics) {
       loadAnalytics();
     }
-  }, [activeTab, analyticsData, loadingAnalytics, loadAnalytics]); // Added missing dependencies
+  }, [activeTab, analyticsData, loadingAnalytics, loadAnalytics]); // Removed the eslint-disable-line and added missing dependencies
 
   const handleTabChange = (tab: 'trends' | 'analytics') => {
     setActiveTab(tab);
@@ -279,7 +266,6 @@ export function Insights() {
           {/* ── TRENDS TAB ─────────────────────────────────────────────── */}
           {activeTab === 'trends' && (
             <div className="space-y-5">
-              {/* Controls */}
               <div className="flex flex-col sm:flex-row gap-3">
                 <Select value={niche} onValueChange={setNiche}>
                   <SelectTrigger className="bg-background/50 sm:w-44">
@@ -298,11 +284,7 @@ export function Insights() {
                     {PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <Button
-                  onClick={loadTrends}
-                  disabled={loadingTrends}
-                  className="gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90 sm:ml-auto"
-                >
+                <Button onClick={loadTrends} disabled={loadingTrends} className="gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90 sm:ml-auto">
                   {loadingTrends ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radio className="h-4 w-4" />}
                   {loadingTrends ? 'Scanning...' : 'Scan Trends'}
                 </Button>
@@ -343,7 +325,6 @@ export function Insights() {
               {/* Results */}
               {trendsData && !loadingTrends && (
                 <div className="space-y-5">
-                  {/* Meta */}
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>Last scanned: {new Date(trendsData.generatedAt).toLocaleString()}</span>
                     <Button variant="ghost" size="sm" onClick={loadTrends} className="gap-1.5 h-7 text-xs">
@@ -352,7 +333,6 @@ export function Insights() {
                     </Button>
                   </div>
 
-                  {/* Warning trends */}
                   {trendsData.warningTrends?.length > 0 && (
                     <div className="glass-card p-4 border border-red-500/20 bg-red-500/5">
                       <div className="flex items-center gap-2 mb-3">
@@ -369,7 +349,6 @@ export function Insights() {
                     </div>
                   )}
 
-                  {/* Emerging formats */}
                   {trendsData.emergingFormats?.length > 0 && (
                     <div className="glass-card p-4 space-y-3">
                       <div className="flex items-center gap-2">
@@ -381,7 +360,7 @@ export function Insights() {
                           <div key={i} className="p-3 rounded-lg bg-muted/30 border border-border/30 space-y-1.5">
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-bold">{f.format}</span>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${ADOPTION_COLORS[f.adoptionStage]}`}>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${ADOPTION_COLORS[f.adoptionStage] || ADOPTION_COLORS.GROWING}`}>
                                 {f.adoptionStage}
                               </span>
                             </div>
@@ -393,19 +372,14 @@ export function Insights() {
                     </div>
                   )}
 
-                  {/* Trend cards */}
                   <div className="space-y-3">
                     <h2 className="font-bold text-sm text-muted-foreground uppercase tracking-wide">
                       {trendsData.trends?.length} Rising Trends · Act Before They Peak
                     </h2>
-                    {trendsData.trends?.map((trend) => {
+                    {trendsData.trends?.map(trend => {
                       const isExpanded = expandedTrend === trend.id;
                       return (
-                        <div
-                          key={trend.id}
-                          className="glass-card border border-border/40 overflow-hidden"
-                        >
-                          {/* Card header */}
+                        <div key={trend.id} className="glass-card border border-border/40 overflow-hidden">
                           <button
                             onClick={() => setExpandedTrend(isExpanded ? null : trend.id)}
                             className="w-full text-left p-4 hover:bg-muted/10 transition-colors"
@@ -417,11 +391,9 @@ export function Insights() {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-start justify-between gap-2 mb-1">
                                   <p className="font-bold text-sm leading-tight">{trend.title}</p>
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${SATURATION_COLORS[trend.saturationRisk]}`}>
-                                      {trend.saturationRisk} risk
-                                    </span>
-                                  </div>
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold shrink-0 ${SATURATION_COLORS[trend.saturationRisk] || SATURATION_COLORS.MEDIUM}`}>
+                                    {trend.saturationRisk} risk
+                                  </span>
                                 </div>
                                 <HeatBar score={trend.heatScore} />
                                 <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
@@ -438,7 +410,6 @@ export function Insights() {
                             </div>
                           </button>
 
-                          {/* Expanded content */}
                           {isExpanded && (
                             <div className="px-4 pb-4 space-y-4 border-t border-border/30 pt-4">
                               <p className="text-sm text-muted-foreground leading-relaxed">{trend.description}</p>
@@ -507,7 +478,6 @@ export function Insights() {
           {/* ── ANALYTICS TAB ──────────────────────────────────────────── */}
           {activeTab === 'analytics' && (
             <div className="space-y-5">
-              {/* Loading */}
               {loadingAnalytics && (
                 <div className="glass-card p-10 text-center space-y-4">
                   <Loader2 className="h-8 w-8 text-primary animate-spin mx-auto" />
@@ -519,26 +489,26 @@ export function Insights() {
               )}
 
               {!loadingAnalytics && !analyticsData && (
-            <div className="glass-card p-12 text-center space-y-4">
-              <div className="flex justify-center">
-                <div className="p-4 rounded-full bg-primary/10">
-                  <BarChart3 className="h-8 w-8 text-primary" />
+                <div className="glass-card p-12 text-center space-y-4">
+                  <div className="flex justify-center">
+                    <div className="p-4 rounded-full bg-primary/10">
+                      <BarChart3 className="h-8 w-8 text-primary" />
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg mb-1">Predictive Analytics</h3>
+                    <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                      AI analyzes your real usage data to predict which content formats will perform best and when to post.
+                    </p>
+                  </div>
+                  <Button onClick={loadAnalytics} disabled={loadingAnalytics} className="gap-2">
+                    <BarChart3 className="h-4 w-4" />
+                    Load Analytics
+                  </Button>
                 </div>
-              </div>
-              <div>
-                <h3 className="font-bold text-lg mb-1">Predictive Analytics</h3>
-                <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                  AI analyzes your real usage data to predict which content formats will perform best and when to post.
-                </p>
-              </div>
-              <Button onClick={loadAnalytics} disabled={loadingAnalytics} className="gap-2">
-                <BarChart3 className="h-4 w-4" />
-                Load Analytics
-              </Button>
-            </div>
-          )}
+              )}
 
-          {!loadingAnalytics && analyticsData && (
+              {!loadingAnalytics && analyticsData && (
                 <div className="space-y-5">
                   {/* Real stats bar */}
                   <div className="glass-card p-4 border border-primary/20 bg-gradient-to-r from-primary/5 to-accent/5">
@@ -586,13 +556,11 @@ export function Insights() {
                                 <p className="text-[10px] text-muted-foreground">{pred.effortLevel} effort</p>
                               </div>
                             </div>
-                            <div className="text-right">
-                              <p className={`text-xs font-bold ${
-                                pred.predictedReach === 'Viral' ? 'text-green-400' :
-                                pred.predictedReach === 'High' ? 'text-blue-400' :
-                                pred.predictedReach === 'Medium' ? 'text-amber-400' : 'text-muted-foreground'
-                              }`}>{pred.predictedReach} Reach</p>
-                            </div>
+                            <p className={`text-xs font-bold ${
+                              pred.predictedReach === 'Viral' ? 'text-green-400' :
+                              pred.predictedReach === 'High' ? 'text-blue-400' :
+                              pred.predictedReach === 'Medium' ? 'text-amber-400' : 'text-muted-foreground'
+                            }`}>{pred.predictedReach} Reach</p>
                           </div>
 
                           <div className="grid grid-cols-2 gap-2">
@@ -659,7 +627,7 @@ export function Insights() {
                           {analyticsData.nicheMomentumScore.trend === 'RISING' && <ArrowUp className="h-4 w-4 text-green-400" />}
                           {analyticsData.nicheMomentumScore.trend === 'STABLE' && <Minus className="h-4 w-4 text-amber-400" />}
                           {analyticsData.nicheMomentumScore.trend === 'DECLINING' && <ArrowDown className="h-4 w-4 text-red-400" />}
-                          <span className={`text-sm font-bold ${TREND_MOMENTUM_COLORS[analyticsData.nicheMomentumScore.trend]}`}>
+                          <span className={`text-sm font-bold ${TREND_MOMENTUM_COLORS[analyticsData.nicheMomentumScore.trend] || 'text-muted-foreground'}`}>
                             {analyticsData.nicheMomentumScore.trend}
                           </span>
                         </div>
@@ -759,12 +727,7 @@ export function Insights() {
                     </div>
                   )}
 
-                  <Button
-                    variant="outline"
-                    onClick={loadAnalytics}
-                    disabled={loadingAnalytics}
-                    className="w-full gap-2"
-                  >
+                  <Button variant="outline" onClick={loadAnalytics} disabled={loadingAnalytics} className="w-full gap-2">
                     <RefreshCw className="h-4 w-4" />
                     Refresh Analytics
                   </Button>
