@@ -1,11 +1,11 @@
 
-import { useState, useEffect, useCallback } from 'react'; // Added useCallback
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/contexts/AuthContext';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
 
 import {
@@ -157,7 +157,6 @@ function ConfidenceRing({ value, label }: { value: number; label: string }) {
 }
 
 export function Insights() {
-  const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'trends' | 'analytics'>('trends');
@@ -170,7 +169,7 @@ export function Insights() {
   const [expandedTrend, setExpandedTrend] = useState<string | null>(null);
   const [userTimezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
 
-  const loadTrends = useCallback(async () => { // Wrapped in useCallback
+  const loadTrends = useCallback(async () => {
     setLoadingTrends(true);
     try {
       const { data, error } = await supabase.functions.invoke('generate-insights', {
@@ -178,11 +177,13 @@ export function Insights() {
       });
       if (error) {
         let msg = error.message;
-        try {
-          // Changed `(error as any).context?.text()` to `await (error as any).context?.text()`
-          const text = await (error as any).context?.text();
-          if (text) msg = text;
-        } catch { /**/ }
+        if (error instanceof FunctionsHttpError) {
+          try {
+            const statusCode = error.context?.status ?? 500;
+            const textContent = await error.context?.text();
+            msg = `[${statusCode}] ${textContent || error.message}`;
+          } catch { /**/ }
+        }
         toast({ title: 'Failed to load trends', description: msg, variant: 'destructive' });
       } else if (data) {
         setTrendsData(data);
@@ -193,9 +194,9 @@ export function Insights() {
     } finally {
       setLoadingTrends(false);
     }
-  }, [niche, platform, toast]); // Added dependencies
+  }, [niche, platform, toast]);
 
-  const loadAnalytics = useCallback(async () => { // Wrapped in useCallback
+  const loadAnalytics = useCallback(async () => {
     setLoadingAnalytics(true);
     try {
       const { data, error } = await supabase.functions.invoke('generate-insights', {
@@ -203,11 +204,13 @@ export function Insights() {
       });
       if (error) {
         let msg = error.message;
-        try {
-          // Changed `(error as any).context?.text()` to `await (error as any).context?.text()`
-          const text = await (error as any).context?.text();
-          if (text) msg = text;
-        } catch { /**/ }
+        if (error instanceof FunctionsHttpError) {
+          try {
+            const statusCode = error.context?.status ?? 500;
+            const textContent = await error.context?.text();
+            msg = `[${statusCode}] ${textContent || error.message}`;
+          } catch { /**/ }
+        }
         toast({ title: 'Failed to load analytics', description: msg, variant: 'destructive' });
       } else if (data) {
         setAnalyticsData(data);
@@ -218,14 +221,14 @@ export function Insights() {
     } finally {
       setLoadingAnalytics(false);
     }
-  }, [niche, userTimezone, toast]); // Added dependencies
+  }, [niche, userTimezone, toast]);
 
   // Auto-load analytics when switching to that tab
   useEffect(() => {
     if (activeTab === 'analytics' && !analyticsData && !loadingAnalytics) {
       loadAnalytics();
     }
-  }, [activeTab, analyticsData, loadingAnalytics, loadAnalytics]); // Corrected dependencies for useEffect
+  }, [activeTab, analyticsData, loadingAnalytics, loadAnalytics]); // Added missing dependencies
 
   const handleTabChange = (tab: 'trends' | 'analytics') => {
     setActiveTab(tab);

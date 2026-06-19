@@ -1,14 +1,16 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/lib/supabase';
+import { FunctionsHttpError } from '@supabase/supabase-js';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import {
   Hash, Loader2, Copy, Check, TrendingUp, Zap,
   RefreshCw, AlertTriangle, Clock, Target, ArrowUp,
-  Sparkles, Globe, BarChart2
+  Sparkles, Globe, BarChart2, History, Trash2
 } from 'lucide-react';
 
 const PLATFORMS = ['TikTok', 'Instagram Reels', 'YouTube Shorts', 'All Platforms'];
@@ -38,6 +40,17 @@ interface HashtagResult {
   strategyNote: string;
   trendingContext: string;
 }
+
+interface RecentHashtagSet {
+  id: string;
+  topic: string;
+  platform: string;
+  bestCombination: string[];
+  savedAt: string;
+}
+
+const STORAGE_KEY = 'viralforge_recent_hashtags';
+const MAX_RECENT = 5;
 
 const TREND_COLORS: Record<string, string> = {
   RISING: 'text-green-400',
@@ -101,7 +114,32 @@ function HashtagCard({ data, onCopy, copied }: { data: HashtagData; onCopy: (tag
   );
 }
 
+function saveToRecent(result: HashtagResult) {
+  try {
+    const existing: RecentHashtagSet[] = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    const newEntry: RecentHashtagSet = {
+      id: Date.now().toString(),
+      topic: result.topic,
+      platform: result.platform,
+      bestCombination: result.bestCombination.slice(0, 12),
+      savedAt: new Date().toISOString(),
+    };
+    // Remove duplicate topic+platform combos
+    const filtered = existing.filter(e => !(e.topic === newEntry.topic && e.platform === newEntry.platform));
+    const updated = [newEntry, ...filtered].slice(0, MAX_RECENT);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    return updated;
+  } catch { return []; }
+}
+
+function loadRecent(): RecentHashtagSet[] {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  } catch { return []; }
+}
+
 export function Hashtags() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [topic, setTopic] = useState('');
   const [platform, setPlatform] = useState('TikTok');
@@ -111,6 +149,13 @@ export function Hashtags() {
   const [copiedTag, setCopiedTag] = useState<string | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
   const [activeSection, setActiveSection] = useState<'primary' | 'niche' | 'community'>('primary');
+  const [recentSets, setRecentSets] = useState<RecentHashtagSet[]>([]);
+  const [copiedRecent, setCopiedRecent] = useState<string | null>(null);
+
+  // Load recent sets on mount (per-user key)
+  useEffect(() => {
+    setRecentSets(loadRecent());
+  }, [user?.id]);
 
   const generate = useCallback(async () => {
     if (!topic.trim()) {
@@ -120,26 +165,38 @@ export function Hashtags() {
     setLoading(true);
     setResult(null);
 
-    const { data, error } = await supabase.functions.invoke('generate-insights', {
-      body: {
-        action: 'hashtag_generator',
-        topic: topic.trim(),
-        platform,
-        niche: niche || undefined,
-      },
-    });
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-insights', {
+        body: {
+          action: 'hashtag_generator',
+          topic: topic.trim(),
+          platform,
+          niche: niche || undefined,
+        },
+      });
 
-    if (error) {
-      let msg = error.message;
-      try {
-        const text = await (error as any).context?.text();
-        if (text) msg = text;
-      } catch { /**/ }
-      toast({ title: 'Failed to generate hashtags', description: msg, variant: 'destructive' });
-    } else if (data) {
-      setResult(data);
+      if (error) {
+        let msg = error.message;
+        if (error instanceof FunctionsHttpError) {
+          try {
+            const statusCode = error.context?.status ?? 500;
+            const textContent = await error.context?.text();
+            msg = `[${statusCode}] ${textContent || error.message}`;
+          } catch { /**/ }
+        }
+        toast({ title: 'Failed to generate hashtags', description: msg, variant: 'destructive' });
+      } else if (data) {
+        setResult(data);
+        // Save to recently used
+        const updated = saveToRecent(data);
+        setRecentSets(updated);
+      }
+    } catch (err: any) {
+      console.error('Hashtag generation error:', err);
+      toast({ title: 'Error', description: err.message || 'Generation failed', variant: 'destructive' });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [topic, platform, niche, toast]);
 
   const copyTag = (tag: string) => {
@@ -164,11 +221,45 @@ export function Hashtags() {
     toast({ title: 'Section copied!', description: `${tags.length} hashtags copied` });
   };
 
+  const copyRecentSet = (set: RecentHashtagSet) => {
+    const tags = set.bestCombination.map(t => `#${t}`).join(' ');
+    navigator.clipboard.writeText(tags);
+    setCopiedRecent(set.id);
+    setTimeout(() => setCopiedRecent(null), 2000);
+    toast({ title: 'Hashtags copied!', description: `${set.bestCombination.length} tags from "${set.topic}"` });
+  };
+
+  const loadRecentSet = (set: RecentHashtagSet) => {
+    setTopic(set.topic);
+    setPlatform(set.platform);
+    toast({ title: 'Loaded!', description: 'Topic and platform pre-filled. Hit Generate to refresh.' });
+  };
+
+  const deleteRecentSet = (id: string) => {
+    const updated = recentSets.filter(s => s.id !== id);
+    setRecentSets(updated);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  };
+
+  const clearAllRecent = () => {
+    setRecentSets([]);
+    localStorage.removeItem(STORAGE_KEY);
+  };
+
   const currentTags = activeSection === 'primary'
     ? result?.primaryHashtags || []
     : activeSection === 'niche'
     ? result?.nicheHashtags || []
     : result?.communityHashtags || [];
+
+  const formatRelativeTime = (iso: string) => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  };
 
   return (
     <AppLayout>
@@ -238,6 +329,94 @@ export function Hashtags() {
               {loading ? 'Analyzing trends...' : 'Generate Trending Hashtags'}
             </Button>
           </div>
+
+          {/* ── RECENTLY USED ──────────────────────────────────────────── */}
+          {recentSets.length > 0 && !result && !loading && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <History className="h-4 w-4 text-muted-foreground" />
+                  <h2 className="text-sm font-bold text-muted-foreground">Recently Used</h2>
+                  <span className="text-[10px] bg-muted/40 text-muted-foreground px-2 py-0.5 rounded-full">
+                    {recentSets.length}/{MAX_RECENT}
+                  </span>
+                </div>
+                <button
+                  onClick={clearAllRecent}
+                  className="text-[11px] text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Clear all
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {recentSets.map(set => (
+                  <div
+                    key={set.id}
+                    className="glass-card p-3 border border-border/40 hover:border-primary/20 transition-all group"
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Info */}
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold truncate">{set.topic}</span>
+                          <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full border border-primary/20 shrink-0">
+                            {set.platform}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground shrink-0">{formatRelativeTime(set.savedAt)}</span>
+                        </div>
+                        {/* Tag preview — scrollable row */}
+                        <div className="flex flex-wrap gap-1.5">
+                          {set.bestCombination.slice(0, 6).map(tag => (
+                            <span
+                              key={tag}
+                              className="text-[10px] px-2 py-0.5 rounded-full bg-muted/40 text-muted-foreground border border-border/30 font-mono"
+                            >
+                              #{tag}
+                            </span>
+                          ))}
+                          {set.bestCombination.length > 6 && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted/40 text-muted-foreground border border-border/30">
+                              +{set.bestCombination.length - 6} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => loadRecentSet(set)}
+                          className="p-2 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                          title="Load this topic"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => copyRecentSet(set)}
+                          className="p-2 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                          title="Copy all hashtags"
+                        >
+                          {copiedRecent === set.id
+                            ? <Check className="h-3.5 w-3.5 text-green-400" />
+                            : <Copy className="h-3.5 w-3.5" />
+                          }
+                        </button>
+                        <button
+                          onClick={() => deleteRecentSet(set.id)}
+                          className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                          title="Remove"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Loading state */}
           {loading && (
@@ -419,11 +598,64 @@ export function Hashtags() {
                   <div><span className="text-green-400 font-bold">RISING trend</span><br />Use NOW before saturation</div>
                 </div>
               </div>
+
+              {/* Recently used — shown after results too */}
+              {recentSets.length > 1 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <History className="h-4 w-4 text-muted-foreground" />
+                      <h2 className="text-sm font-bold text-muted-foreground">Previously Generated</h2>
+                    </div>
+                    <button
+                      onClick={clearAllRecent}
+                      className="text-[11px] text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Clear
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {recentSets.filter(s => !(s.topic === result.topic && s.platform === result.platform)).map(set => (
+                      <div key={set.id} className="glass-card p-3 border border-border/40 hover:border-primary/20 transition-all group">
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-bold truncate">{set.topic}</span>
+                              <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full border border-primary/20 shrink-0">{set.platform}</span>
+                              <span className="text-[10px] text-muted-foreground shrink-0">{formatRelativeTime(set.savedAt)}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {set.bestCombination.slice(0, 5).map(tag => (
+                                <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground font-mono">#{tag}</span>
+                              ))}
+                              {set.bestCombination.length > 5 && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/40 text-muted-foreground">+{set.bestCombination.length - 5}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button onClick={() => loadRecentSet(set)} className="p-1.5 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors" title="Reload">
+                              <RefreshCw className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => copyRecentSet(set)} className="p-1.5 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors" title="Copy">
+                              {copiedRecent === set.id ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+                            </button>
+                            <button onClick={() => deleteRecentSet(set.id)} className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Remove">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {/* Empty state */}
-          {!result && !loading && (
+          {!result && !loading && recentSets.length === 0 && (
             <div className="glass-card p-12 text-center space-y-4">
               <div className="flex justify-center">
                 <div className="p-4 rounded-full bg-primary/10 relative">
