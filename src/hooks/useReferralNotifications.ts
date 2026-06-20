@@ -10,23 +10,21 @@ export function useReferralNotifications() {
   const toastRef = useRef(toast);
   toastRef.current = toast;
 
-  const getStorageKey = useCallback(() => `viralforge_seen_referrals_${user?.id}`, [user?.id]);
-  const getSeenCount = useCallback(() => parseInt(localStorage.getItem(getStorageKey()) || '0'), [getStorageKey]);
-  const saveSeenCount = useCallback((count: number) => localStorage.setItem(getStorageKey(), String(count)), [getStorageKey]);
+  const storageKey = user?.id ? `viralforge_seen_referrals_${user.id}` : null;
 
   const clearNotifications = useCallback(async () => {
     setNewReferralCount(0);
-    if (!user) return;
+    if (!user?.id || !storageKey) return;
     try {
       const { count } = await supabase
         .from('referrals')
         .select('id', { count: 'exact', head: true })
         .eq('referrer_id', user.id);
-      saveSeenCount(count || 0);
+      localStorage.setItem(storageKey, String(count || 0));
     } catch (e) {
       console.error('clearNotifications error:', e);
     }
-  }, [user, saveSeenCount]);
+  }, [user?.id, storageKey]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -43,7 +41,8 @@ export function useReferralNotifications() {
 
         if (!mounted) return;
         const total = count || 0;
-        const seen = parseInt(localStorage.getItem(`viralforge_seen_referrals_${user.id}`) || '0');
+        const key = `viralforge_seen_referrals_${user.id}`;
+        const seen = parseInt(localStorage.getItem(key) || '0');
         if (total > seen) {
           setNewReferralCount(total - seen);
         }
