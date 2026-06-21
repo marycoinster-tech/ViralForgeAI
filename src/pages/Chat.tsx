@@ -8,9 +8,10 @@ import { GeneratorInput } from '@/types/content';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Sparkles, RotateCcw, X, AlertCircle } from 'lucide-react';
+import { Sparkles, RotateCcw, X, AlertCircle, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BuyCreditsModal } from '@/components/features/BuyCreditsModal';
+import { ToolsPanel } from '@/components/features/ToolsPanel';
 
 interface Message {
   id: string;
@@ -35,6 +36,7 @@ export function Chat() {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [streamingContent, setStreamingContent] = useState<string>('');
   const [showBuyCredits, setShowBuyCredits] = useState(false);
+  const [showTools, setShowTools] = useState(false);
   const [userCredits, setUserCredits] = useState(0);
   // Daily thumbnail image limit tracking
   const [dailyImageCount, setDailyImageCount] = useState(0);
@@ -130,9 +132,8 @@ export function Chat() {
 
     abortControllerRef.current = new AbortController();
 
-    // Check if this is a thumbnail generation request
-    const isThumbnailRequest = input.customTopic?.toLowerCase().includes('/thumbnail') ||
-      input.customTopic?.toLowerCase().includes('thumbnail') && input.customTopic?.toLowerCase().includes('generate');
+    // Check if this is a thumbnail generation request — only triggered by [THUMBNAIL REQUEST] prefix from InputBar
+    const isThumbnailRequest = input.customTopic?.startsWith('[THUMBNAIL REQUEST]');
 
     if (isThumbnailRequest) {
       if (dailyImageCount >= DAILY_IMAGE_LIMIT) {
@@ -301,7 +302,18 @@ export function Chat() {
 
   return (
     <AppLayout>
-      <div className="h-full flex flex-col">
+      <div className="h-full flex flex-col relative">
+        {/* Tools button — top right corner */}
+        <div className="absolute top-4 right-4 z-20">
+          <button
+            onClick={() => setShowTools(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors"
+          >
+            <Wand2 className="h-3.5 w-3.5" />
+            Tools
+          </button>
+        </div>
+
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-4xl mx-auto px-4 py-8">
             {isLoadingHistory ? (
@@ -436,6 +448,8 @@ export function Chat() {
           dailyImageLimit={DAILY_IMAGE_LIMIT}
         />
       </div>
+
+      {showTools && <ToolsPanel onClose={() => setShowTools(false)} />}
 
       <BuyCreditsModal
         open={showBuyCredits}
