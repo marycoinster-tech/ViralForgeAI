@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCredits } from '@/contexts/CreditsContext';
 import { supabase } from '@/lib/supabase';
-import { 
-  Zap, 
-  Plus, 
-  MessageSquare, 
-  LogOut, 
+import {
+  Zap,
+  Plus,
+  MessageSquare,
+  LogOut,
   Settings as SettingsIcon,
   Sparkles,
   User,
@@ -16,11 +17,11 @@ import {
   Swords,
   Dna,
   CalendarDays,
-  Radio
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { BuyCreditsModal } from '@/components/features/BuyCreditsModal';
 import { useReferralNotifications } from '@/hooks/useReferralNotifications';
+import viralforgerMascot from '@/assets/viralforger-mascot.png';
 
 interface Conversation {
   id: string;
@@ -37,18 +38,15 @@ export function Sidebar({ onClose }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const { credits, refreshCredits } = useCredits();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [credits, setCredits] = useState(0);
   const [showBuyCredits, setShowBuyCredits] = useState(false);
   const { newReferralCount, clearNotifications } = useReferralNotifications();
 
   useEffect(() => {
-    if (user) {
-      loadConversations();
-      loadCredits();
-    }
+    if (user) loadConversations();
   }, [user]);
 
   const loadConversations = async () => {
@@ -58,28 +56,12 @@ export function Sidebar({ onClose }: SidebarProps) {
         .select('id, title, updated_at')
         .order('updated_at', { ascending: false })
         .limit(50);
-
       if (error) throw error;
       setConversations(data || []);
     } catch (error) {
       console.error('Failed to load conversations:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadCredits = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('credits_remaining')
-        .eq('id', user!.id)
-        .single();
-
-      if (error) throw error;
-      setCredits(data?.credits_remaining || 0);
-    } catch (error) {
-      console.error('Failed to load credits:', error);
     }
   };
 
@@ -93,242 +75,179 @@ export function Sidebar({ onClose }: SidebarProps) {
     navigate('/login');
   };
 
-  const isActiveConversation = (id: string) => {
-    return location.pathname === `/app/${id}`;
-  };
+  const isActiveConversation = (id: string) => location.pathname === `/app/${id}`;
 
   const handleDeleteConversation = async (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-
-    // Confirm deletion
-    if (!confirm('Delete this conversation? This action cannot be undone.')) {
-      return;
-    }
-
+    if (!confirm('Delete this conversation? This action cannot be undone.')) return;
     setDeletingId(id);
-
     try {
-      const { error } = await supabase
-        .from('conversations')
-        .delete()
-        .eq('id', id);
-
+      const { error } = await supabase.from('conversations').delete().eq('id', id);
       if (error) throw error;
-
-      // Remove from local state
       setConversations(prev => prev.filter(conv => conv.id !== id));
-
-      // If deleting the active conversation, redirect to new chat
-      if (isActiveConversation(id)) {
-        navigate('/app');
-      }
-
-      toast({
-        title: 'Deleted',
-        description: 'Conversation deleted successfully',
-      });
+      if (isActiveConversation(id)) navigate('/app');
+      toast({ title: 'Deleted', description: 'Conversation deleted' });
     } catch (error: any) {
-      console.error('Failed to delete conversation:', error);
-      toast({
-        title: 'Failed to delete',
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast({ title: 'Failed to delete', description: error.message, variant: 'destructive' });
     } finally {
       setDeletingId(null);
     }
   };
 
-  return (
-    <div className="h-full flex flex-col bg-card/30 border-r border-border/40">
-      {/* Header */}
-      <div className="p-4 border-b border-border/40">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="relative">
-            <Zap className="h-6 w-6 text-primary" fill="currentColor" />
-            <div className="absolute inset-0 blur-lg bg-primary/50" />
-          </div>
-          <span className="text-lg font-black text-gradient">ViralForge</span>
-        </div>
+  const navItem = (
+    to: string,
+    icon: React.ReactNode,
+    label: string,
+    badge?: string,
+    badgeColor = 'bg-primary/10 text-primary',
+  ) => {
+    const active = location.pathname === to;
+    return (
+      <Link
+        to={to}
+        onClick={onClose}
+        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-semibold text-sm ${
+          active
+            ? 'bg-primary text-primary-foreground shadow-md glow-primary'
+            : 'hover:bg-muted/60 text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        <span className={active ? 'text-primary-foreground' : 'text-primary'}>{icon}</span>
+        <span className="flex-1">{label}</span>
+        {badge && !active && (
+          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${badgeColor}`}>{badge}</span>
+        )}
+      </Link>
+    );
+  };
 
+  return (
+    <div className="h-full flex flex-col bg-card border-r border-border/50">
+      {/* Brand header */}
+      <div className="px-4 pt-5 pb-4 border-b border-border/40">
+        <div className="flex items-center gap-3 mb-4">
+          <img src={viralforgerMascot} alt="ViralForger" className="h-9 w-9 rounded-xl object-cover" />
+          <div>
+            <div className="text-base font-black text-gradient leading-none">ViralForge</div>
+            <div className="text-[10px] text-muted-foreground font-semibold tracking-wide mt-0.5">AI CONTENT ENGINE</div>
+          </div>
+        </div>
         <Button
           onClick={handleNewChat}
-          className="w-full justify-start gap-2 h-10"
-          variant="default"
+          className="w-full justify-start gap-2 h-10 font-bold bg-primary text-primary-foreground hover:bg-primary/90 glow-primary"
         >
           <Plus className="h-4 w-4" />
           New Generation
         </Button>
       </div>
 
-      {/* Feature Nav */}
-      <div className="px-3 pt-3 pb-1 space-y-1">
-        <Link
-          to="/app/hook-battle"
-          onClick={onClose}
-          className={`flex items-center gap-3 p-2.5 rounded-lg transition-colors group ${
-            location.pathname === '/app/hook-battle'
-              ? 'bg-primary/10 border border-primary/20 text-primary'
-              : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Swords className="h-4 w-4 shrink-0" />
-          <span className="text-sm font-semibold">Hook Battle</span>
-          <span className="ml-auto text-[10px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">NEW</span>
-        </Link>
-        <Link
-          to="/app/viral-dna"
-          onClick={onClose}
-          className={`flex items-center gap-3 p-2.5 rounded-lg transition-colors group ${
-            location.pathname === '/app/viral-dna'
-              ? 'bg-accent/10 border border-accent/20 text-accent'
-              : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Dna className="h-4 w-4 shrink-0" />
-          <span className="text-sm font-semibold">Viral DNA</span>
-          <span className="ml-auto text-[10px] font-bold bg-accent/10 text-accent px-1.5 py-0.5 rounded-full">NEW</span>
-        </Link>
-        <Link
-          to="/app/calendar"
-          onClick={onClose}
-          className={`flex items-center gap-3 p-2.5 rounded-lg transition-colors group ${
-            location.pathname === '/app/calendar'
-              ? 'bg-green-500/10 border border-green-500/20 text-green-400'
-              : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <CalendarDays className="h-4 w-4 shrink-0" />
-          <span className="text-sm font-semibold">Content Calendar</span>
-          <span className="ml-auto text-[10px] font-bold bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded-full">NEW</span>
-        </Link>
-        <Link
-          to="/app/insights"
-          onClick={onClose}
-          className={`flex items-center gap-3 p-2.5 rounded-lg transition-colors group ${
-            location.pathname === '/app/insights'
-              ? 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-400'
-              : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Radio className="h-4 w-4 shrink-0" />
-          <span className="text-sm font-semibold">Trend Signals</span>
-          <span className="ml-auto text-[10px] font-bold bg-cyan-500/10 text-cyan-400 px-1.5 py-0.5 rounded-full">NEW</span>
-        </Link>
+      {/* Feature nav */}
+      <div className="px-3 pt-3 pb-1 space-y-0.5">
+        {navItem('/app/hook-battle', <Swords className="h-4 w-4" />, 'Hook Battle', 'HOT')}
+        {navItem('/app/viral-dna', <Dna className="h-4 w-4" />, 'Viral DNA', 'NEW')}
+        {navItem('/app/calendar', <CalendarDays className="h-4 w-4" />, 'Content Calendar')}
       </div>
 
       {/* Conversations */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        <div className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+      <div className="flex-1 overflow-y-auto px-3 pt-2 space-y-0.5">
+        <div className="px-2 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
           Conversations
         </div>
         {loading ? (
-          <div className="p-4 text-center text-sm text-muted-foreground">
-            Loading...
-          </div>
+          <div className="p-3 text-center text-sm text-muted-foreground animate-pulse">Loading…</div>
         ) : conversations.length === 0 ? (
-          <div className="p-4 text-center text-sm text-muted-foreground">
-            No conversations yet
-          </div>
+          <div className="p-3 text-center text-sm text-muted-foreground">No conversations yet</div>
         ) : (
           conversations.map((conv) => (
             <div key={conv.id} className="relative group/item">
               <Link
                 to={`/app/${conv.id}`}
                 onClick={onClose}
-                className={`flex items-center gap-3 p-3 pr-10 rounded-lg transition-colors group ${
+                className={`flex items-center gap-2.5 px-3 py-2.5 pr-9 rounded-xl transition-all text-sm ${
                   isActiveConversation(conv.id)
-                    ? 'bg-primary/10 border border-primary/20'
-                    : 'hover:bg-muted/50'
+                    ? 'bg-primary/10 electric-border text-foreground'
+                    : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <MessageSquare className={`h-4 w-4 flex-shrink-0 ${
-                  isActiveConversation(conv.id)
-                    ? 'text-primary'
-                    : 'text-muted-foreground group-hover:text-primary'
-                }`} />
-                <span className="text-sm truncate flex-1">
-                  {conv.title}
-                </span>
+                <MessageSquare className={`h-3.5 w-3.5 flex-shrink-0 ${isActiveConversation(conv.id) ? 'text-primary' : 'text-muted-foreground'}`} />
+                <span className="truncate flex-1 text-xs font-medium">{conv.title}</span>
               </Link>
               <button
                 onClick={(e) => handleDeleteConversation(conv.id, e)}
                 disabled={deletingId === conv.id}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded opacity-0 group-hover/item:opacity-100 hover:bg-destructive/10 transition-all disabled:opacity-50"
-                title="Delete conversation"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg opacity-0 group-hover/item:opacity-100 hover:bg-destructive/10 transition-all"
               >
-                <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
               </button>
             </div>
           ))
         )}
       </div>
 
-      {/* User Section */}
-      <div className="p-4 border-t border-border/40 space-y-2">
-        {/* Credits Display */}
-        <div className="p-3 rounded-lg bg-gradient-to-br from-primary/10 to-accent/10 border border-primary/20">
+      {/* Credits + User */}
+      <div className="p-3 border-t border-border/40 space-y-2">
+        {/* Credits card */}
+        <div className="p-3 rounded-xl bg-primary text-primary-foreground">
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <span className="text-xs font-medium text-muted-foreground">Credits</span>
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" />
+              <span className="text-xs font-bold">Credits</span>
             </div>
-            <span className="text-2xl font-black text-gradient">{credits}</span>
+            <span className="text-2xl font-black leading-none">{credits}</span>
           </div>
           <Button
             onClick={() => setShowBuyCredits(true)}
             size="sm"
-            className="w-full h-8 bg-gradient-to-r from-primary to-accent hover:opacity-90"
+            className="w-full h-7 bg-primary-foreground/15 hover:bg-primary-foreground/25 text-primary-foreground border border-primary-foreground/20 font-bold text-xs"
           >
-            <ShoppingCart className="mr-2 h-3.5 w-3.5" />
+            <ShoppingCart className="mr-1.5 h-3 w-3" />
             Buy Credits
           </Button>
         </div>
 
-        {/* User Info */}
-        <div className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors">
-          <User className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm truncate flex-1">{user?.username}</span>
+        {/* User row */}
+        <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg">
+          <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center">
+            <User className="h-3 w-3 text-primary" />
+          </div>
+          <span className="text-xs font-semibold truncate flex-1 text-muted-foreground">{user?.username}</span>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           <Button
             variant="ghost"
             size="sm"
-            className="flex-1 relative"
+            className="flex-1 relative h-8"
             onClick={() => {
               clearNotifications();
               navigate('/app/settings');
               onClose?.();
             }}
           >
-            <SettingsIcon className="h-4 w-4" />
+            <SettingsIcon className="h-3.5 w-3.5" />
             {newReferralCount > 0 && (
               <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-green-500 text-[8px] font-black text-white items-center justify-center">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
+                <span className="relative flex h-3.5 w-3.5 rounded-full bg-primary text-[8px] font-black text-primary-foreground items-center justify-center">
                   {newReferralCount > 9 ? '9+' : newReferralCount}
                 </span>
               </span>
             )}
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="flex-1"
-            onClick={handleLogout}
-          >
-            <LogOut className="h-4 w-4" />
+          <Button variant="ghost" size="sm" className="flex-1 h-8" onClick={handleLogout}>
+            <LogOut className="h-3.5 w-3.5" />
           </Button>
         </div>
       </div>
 
-      {/* Buy Credits Modal */}
       <BuyCreditsModal
         open={showBuyCredits}
         onOpenChange={setShowBuyCredits}
-        onSuccess={loadCredits}
+        onSuccess={() => {
+          refreshCredits();
+          window.dispatchEvent(new Event('viralforge:credits-updated'));
+        }}
       />
     </div>
   );

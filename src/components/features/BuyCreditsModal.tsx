@@ -234,6 +234,9 @@ export function BuyCreditsModal({ open, onOpenChange, onSuccess }: BuyCreditsMod
         setSelectedPack(null);
         onOpenChange(false);
         
+        // Broadcast credits update globally so Sidebar + MobileNav refresh instantly
+        window.dispatchEvent(new Event('viralforge:credits-updated'));
+        
         if (onSuccess) {
           onSuccess();
         }

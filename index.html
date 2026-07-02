@@ -2,53 +2,144 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ViralForge AI - Generate Viral TikTok Content in Seconds</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>ViralForge AI — Go Viral in Seconds ⚡</title>
     <meta name="description" content="AI-powered viral content generator for TikTok, Reels, and Shorts. Get scroll-stopping hooks, scripts, captions, and hashtags instantly. Built for Gen Z creators." />
     <meta name="keywords" content="tiktok ai, viral content generator, reels generator, shorts creator, gen z, content creation, viral hooks, ai content" />
-    
-    <!-- Open Graph / Facebook -->
+    <meta name="theme-color" content="#FFE500" />
+
+    <!-- PWA -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ViralForge" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+
+    <!-- Splash screens -->
+    <meta name="msapplication-TileColor" content="#1C1C1E" />
+    <meta name="msapplication-TileImage" content="/og-image.jpg" />
+
+    <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://viralforge.onspace.ai" />
-    <meta property="og:title" content="ViralForge AI - Generate Viral TikTok Content in Seconds" />
-    <meta property="og:description" content="AI-powered viral content generator for TikTok, Reels, and Shorts. Get scroll-stopping hooks, scripts, captions, and hashtags instantly. Built for Gen Z creators." />
-    <meta property="og:image" content="https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0?w=1200&h=630&fit=crop" />
+    <meta property="og:title" content="ViralForge AI — Go Viral in Seconds ⚡" />
+    <meta property="og:description" content="AI-powered viral content generator for TikTok, Reels, and Shorts. Built for Gen Z creators who want results, not theory." />
+    <meta property="og:image" content="/og-image.jpg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:site_name" content="ViralForge AI" />
-    <meta property="og:locale" content="en_US" />
-    
+
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://viralforge.onspace.ai" />
-    <meta name="twitter:title" content="ViralForge AI - Generate Viral TikTok Content in Seconds" />
-    <meta name="twitter:description" content="AI-powered viral content generator for TikTok, Reels, and Shorts. Get scroll-stopping hooks, scripts, captions, and hashtags instantly. Built for Gen Z creators." />
-    <meta name="twitter:image" content="https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0?w=1200&h=630&fit=crop" />
-    
-    <!-- Schema.org JSON-LD -->
+    <meta name="twitter:title" content="ViralForge AI — Go Viral in Seconds ⚡" />
+    <meta name="twitter:description" content="AI-powered viral content generator for TikTok, Reels, and Shorts. Built for Gen Z creators who want results." />
+    <meta name="twitter:image" content="/og-image.jpg" />
+
+    <!-- Schema.org -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "WebApplication",
       "name": "ViralForge AI",
       "url": "https://viralforge.onspace.ai",
-      "description": "AI-powered viral content generator for TikTok, Reels, and Shorts. Get scroll-stopping hooks, scripts, captions, and hashtags instantly. Built for Gen Z creators.",
+      "description": "AI-powered viral content generator for TikTok, Reels, and Shorts. Built for Gen Z creators.",
       "applicationCategory": "CreativeWork",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-      }
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
     }
     </script>
-    
+
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+    <style>
+      /* Splash / loading screen */
+      #splash {
+        position: fixed;
+        inset: 0;
+        background: #1C1C1E;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        transition: opacity 0.5s ease, transform 0.5s ease;
+      }
+      #splash.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #splash .bolt {
+        width: 64px;
+        height: 64px;
+        animation: splash-pulse 1s ease-in-out infinite alternate;
+      }
+      #splash .wordmark {
+        margin-top: 16px;
+        font-family: Inter, sans-serif;
+        font-weight: 900;
+        font-size: 28px;
+        letter-spacing: -0.04em;
+        color: #FFE500;
+      }
+      #splash .tagline {
+        margin-top: 6px;
+        font-family: Inter, sans-serif;
+        font-size: 13px;
+        color: rgba(255,255,255,0.4);
+        letter-spacing: 0.04em;
+      }
+      #splash .bar {
+        margin-top: 32px;
+        width: 120px;
+        height: 3px;
+        background: rgba(255,229,0,0.15);
+        border-radius: 99px;
+        overflow: hidden;
+      }
+      #splash .bar-fill {
+        height: 100%;
+        background: #FFE500;
+        border-radius: 99px;
+        animation: bar-load 1.2s ease-out forwards;
+      }
+      @keyframes splash-pulse {
+        from { filter: drop-shadow(0 0 10px #FFE500aa); transform: scale(0.95); }
+        to   { filter: drop-shadow(0 0 30px #FFE500ff); transform: scale(1.05); }
+      }
+      @keyframes bar-load {
+        from { width: 0; }
+        to   { width: 100%; }
+      }
+    </style>
   </head>
   <body>
+    <!-- Splash screen -->
+    <div id="splash">
+      <svg class="bolt" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="32" height="32" rx="8" fill="#2A2A2A"/>
+        <polygon points="19,2 10,18 15,18 13,30 22,14 17,14" fill="#FFE500"/>
+      </svg>
+      <div class="wordmark">ViralForge AI</div>
+      <div class="tagline">GO VIRAL IN SECONDS ⚡</div>
+      <div class="bar"><div class="bar-fill"></div></div>
+    </div>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Hide splash when React is ready
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          var splash = document.getElementById('splash');
+          if (splash) {
+            splash.classList.add('hidden');
+            setTimeout(function() { splash.style.display = 'none'; }, 500);
+          }
+        }, 1400);
+      });
+    </script>
   </body>
 </html>

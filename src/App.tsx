@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { CreditsProvider } from '@/contexts/CreditsContext';
 import { Toaster } from '@/components/ui/toaster';
 import { Login } from '@/pages/Login';
 import { Signup } from '@/pages/Signup';
@@ -11,14 +12,19 @@ import { HookBattle } from '@/pages/HookBattle';
 import { ViralDNA } from '@/pages/ViralDNA';
 import { Calendar } from '@/pages/Calendar';
 
-
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center">
-        <div className="h-8 w-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+      <div className="h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative">
+            <div className="h-10 w-10 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+            <div className="absolute inset-0 rounded-full blur-md bg-primary/20 animate-pulse" />
+          </div>
+          <span className="text-xs text-muted-foreground font-semibold tracking-widest uppercase">Loading</span>
+        </div>
       </div>
     );
   }
@@ -31,7 +37,7 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center">
+      <div className="h-screen flex items-center justify-center bg-background">
         <div className="h-8 w-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
       </div>
     );
@@ -44,22 +50,8 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
-      <Route
-        path="/login"
-        element={
-          <PublicRoute>
-            <Login />
-          </PublicRoute>
-        }
-      />
-      <Route
-        path="/signup"
-        element={
-          <PublicRoute>
-            <Signup />
-          </PublicRoute>
-        }
-      />
+      <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+      <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
       <Route
         path="/app/*"
         element={
@@ -71,7 +63,6 @@ function AppRoutes() {
               <Route path="/hook-battle" element={<HookBattle />} />
               <Route path="/viral-dna" element={<ViralDNA />} />
               <Route path="/calendar" element={<Calendar />} />
-
             </Routes>
           </PrivateRoute>
         }
@@ -85,8 +76,10 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <ThemeProvider>
-          <AppRoutes />
-          <Toaster />
+          <CreditsProvider>
+            <AppRoutes />
+            <Toaster />
+          </CreditsProvider>
         </ThemeProvider>
       </AuthProvider>
     </BrowserRouter>
