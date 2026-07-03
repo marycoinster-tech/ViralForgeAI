@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCredits } from '@/contexts/CreditsContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/lib/supabase';
 import {
   Zap,
@@ -17,6 +18,8 @@ import {
   Swords,
   Dna,
   CalendarDays,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { BuyCreditsModal } from '@/components/features/BuyCreditsModal';
@@ -39,6 +42,7 @@ export function Sidebar({ onClose }: SidebarProps) {
   const location = useLocation();
   const { toast } = useToast();
   const { credits, refreshCredits } = useCredits();
+  const { theme, setTheme } = useTheme();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -214,6 +218,7 @@ export function Sidebar({ onClose }: SidebarProps) {
           <span className="text-xs font-semibold truncate flex-1 text-muted-foreground">{user?.username}</span>
         </div>
 
+        {/* Action row — settings, theme toggle, logout */}
         <div className="flex gap-1.5">
           <Button
             variant="ghost"
@@ -235,6 +240,22 @@ export function Sidebar({ onClose }: SidebarProps) {
               </span>
             )}
           </Button>
+
+          {/* Theme toggle */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="flex-1 h-8 hover:bg-primary/10"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            aria-label="Toggle theme"
+          >
+            {theme === 'dark' ? (
+              <Sun className="h-3.5 w-3.5 text-primary" />
+            ) : (
+              <Moon className="h-3.5 w-3.5 text-primary" />
+            )}
+          </Button>
+
           <Button variant="ghost" size="sm" className="flex-1 h-8" onClick={handleLogout}>
             <LogOut className="h-3.5 w-3.5" />
           </Button>
