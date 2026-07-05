@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import { Zap, Sparkles, Flame, Swords, Dna, CalendarDays, ArrowRight, Star, ChevronRight, Download } from 'lucide-react';
+import { Zap, Sparkles, Flame, Swords, Dna, CalendarDays, ArrowRight, Star, ChevronRight } from 'lucide-react';
 import viralforgerMascot from '@/assets/viralforger-mascot.png';
 import mascot2 from '@/assets/viralforger-2.png';
 import mascot3 from '@/assets/viralforger-3.png';
@@ -24,8 +24,6 @@ const BG_MASCOTS = [mascot2, mascot3, mascot4, mascot5, mascot6, viralforgerMasc
 export function Home() {
   const { user } = useAuth();
   const [activeSlide, setActiveSlide] = useState(0);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [showInstall, setShowInstall] = useState(false);
 
   // Auto-advance hero slider
   useEffect(() => {
@@ -34,25 +32,6 @@ export function Home() {
     }, 3200);
     return () => clearInterval(id);
   }, []);
-
-  // PWA install prompt
-  useEffect(() => {
-    const handler = (e: any) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-      setShowInstall(true);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
-
-  const handleInstall = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') setShowInstall(false);
-    setDeferredPrompt(null);
-  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background overflow-x-hidden">
@@ -66,18 +45,6 @@ export function Home() {
             <h1 className="text-xl font-black text-gradient">ViralForge AI</h1>
           </div>
           <div className="flex items-center gap-2">
-            {/* PWA Install button */}
-            {showInstall && (
-              <Button
-                onClick={handleInstall}
-                size="sm"
-                variant="outline"
-                className="gap-1.5 border-primary/40 hover:bg-primary/10 text-primary font-bold text-xs hidden sm:flex"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Install App
-              </Button>
-            )}
             {user ? (
               <Link to="/app">
                 <Button className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 font-bold">
@@ -88,7 +55,7 @@ export function Home() {
             ) : (
               <>
                 <Link to="/login">
-                  <Button variant="ghost" className="font-semibold hidden sm:inline-flex">Sign in</Button>
+                  <Button variant="ghost" className="font-semibold">Sign in</Button>
                 </Link>
                 <Link to="/signup">
                   <Button className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold">
