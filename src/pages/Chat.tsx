@@ -8,10 +8,11 @@ import { GeneratorInput } from '@/types/content';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Sparkles, RotateCcw, X, AlertCircle } from 'lucide-react';
+import { Zap, RotateCcw, X, AlertCircle, Swords, Dna } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BuyCreditsModal } from '@/components/features/BuyCreditsModal';
-
+import { WelcomeModal } from '@/components/features/WelcomeModal';
+import viralforgerMascot from '@/assets/viralforger-mascot.png';
 
 interface Message {
   id: string;
@@ -19,6 +20,8 @@ interface Message {
   content: any;
   created_at: string;
 }
+
+const WELCOME_KEY = 'viralforge_welcome_shown';
 
 export function Chat() {
   const { conversationId } = useParams();
@@ -36,14 +39,27 @@ export function Chat() {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [streamingContent, setStreamingContent] = useState<string>('');
   const [showBuyCredits, setShowBuyCredits] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
 
   const [userCredits, setUserCredits] = useState(0);
-  // Daily thumbnail image limit tracking
   const [dailyImageCount, setDailyImageCount] = useState(0);
   const DAILY_IMAGE_LIMIT = 4;
 
   const generationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Show welcome modal for new users
+  useEffect(() => {
+    if (!user) return;
+    const key = `${WELCOME_KEY}_${user.id}`;
+    const shown = localStorage.getItem(key);
+    if (!shown) {
+      localStorage.setItem(key, 'true');
+      // Small delay so layout settles first
+      const t = setTimeout(() => setShowWelcome(true), 600);
+      return () => clearTimeout(t);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     setIsGenerating(false);
@@ -132,7 +148,6 @@ export function Chat() {
 
     abortControllerRef.current = new AbortController();
 
-    // Check if this is a thumbnail generation request — only triggered by [THUMBNAIL REQUEST] prefix from InputBar
     const isThumbnailRequest = input.customTopic?.startsWith('[THUMBNAIL REQUEST]');
 
     if (isThumbnailRequest) {
@@ -287,15 +302,18 @@ export function Chat() {
 
   const quickPrompts = [
     {
-      label: 'Dark anime content',
+      label: '🌑 Dark anime hook',
+      sublabel: 'Anime · Dark',
       input: { niche: 'anime' as const, vibe: 'dark' as const, goal: 'followers' as const, platform: 'tiktok' as const, customTopic: 'dark anime moments that hit different' },
     },
     {
-      label: 'Money-making tips',
+      label: '💰 Make money with AI',
+      sublabel: 'Money · Motivational',
       input: { niche: 'money' as const, vibe: 'motivational' as const, goal: 'money' as const, platform: 'tiktok' as const, customTopic: 'how to make money with AI in 2026' },
     },
     {
-      label: 'Toxic motivation',
+      label: '☠️ Toxic motivation',
+      sublabel: 'Motivation · Toxic',
       input: { niche: 'motivation' as const, vibe: 'toxic' as const, goal: 'engagement' as const, platform: 'reels' as const },
     },
   ];
@@ -304,37 +322,87 @@ export function Chat() {
     <AppLayout>
       <div className="h-full flex flex-col relative">
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-4xl mx-auto px-4 py-8">
+          <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
             {isLoadingHistory ? (
               <div className="flex items-center justify-center h-64">
                 <div className="h-8 w-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
               </div>
             ) : messages.length === 0 ? (
-              <div className="h-full flex items-center justify-center">
-                <div className="text-center space-y-4 max-w-md animate-fade-in">
+              /* ─── EMPTY STATE ─── */
+              <div className="flex flex-col items-center justify-center min-h-[70vh] py-8">
+                <div className="text-center space-y-6 max-w-sm w-full animate-fade-in">
+
+                  {/* Mascot with glow ring */}
                   <div className="flex justify-center">
                     <div className="relative">
-                      <Sparkles className="h-16 w-16 text-primary animate-pulse" />
-                      <div className="absolute inset-0 blur-2xl bg-primary/30 animate-glow-pulse" />
+                      {/* Pulsing glow ring */}
+                      <div className="absolute -inset-6 rounded-full bg-primary/15 blur-2xl animate-glow-pulse" />
+                      <div className="absolute -inset-4 rounded-full border-2 border-primary/20 animate-[spin_8s_linear_infinite]" />
+                      <div className="absolute -inset-2 rounded-full border border-primary/10 animate-[spin_5s_linear_infinite_reverse]" />
+                      <img
+                        src={viralforgerMascot}
+                        alt="ViralForger"
+                        className="relative h-28 w-28 sm:h-32 sm:w-32 object-contain animate-spark-float drop-shadow-2xl"
+                      />
                     </div>
                   </div>
-                  <h2 className="text-3xl font-black">
-                    Ready to go <span className="text-gradient">viral</span>?
-                  </h2>
-                  <p className="text-muted-foreground">
-                    Tell me what kind of content you want to create, and I'll generate hooks, scripts, and captions that actually hit.
-                  </p>
-                  <div className="flex flex-wrap gap-2 justify-center pt-4">
+
+                  {/* Heading */}
+                  <div className="space-y-2">
+                    <h2 className="text-2xl sm:text-3xl font-black">
+                      Ready to go <span className="text-gradient">viral</span>? ⚡
+                    </h2>
+                    <p className="text-sm text-muted-foreground leading-relaxed px-2">
+                      Tell me your niche, vibe, or topic — I'll give you hooks, scripts, and captions that actually hit.
+                    </p>
+                  </div>
+
+                  {/* Quick prompt pills */}
+                  <div className="space-y-2.5">
+                    <div className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Quick start</div>
                     {quickPrompts.map((prompt) => (
                       <button
                         key={prompt.label}
                         onClick={() => handleGenerate(prompt.input)}
                         disabled={isGenerating}
-                        className="px-4 py-2 rounded-lg bg-muted/50 hover:bg-muted text-sm font-medium transition-colors disabled:opacity-50"
+                        className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl border-2 border-primary/20 bg-primary/5 hover:border-primary/50 hover:bg-primary/10 transition-all duration-200 text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ boxShadow: 'none' }}
+                        onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 0 16px hsl(51 100% 50% / 0.12)')}
+                        onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
                       >
-                        {prompt.label}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-sm text-foreground">{prompt.label}</div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5">{prompt.sublabel}</div>
+                        </div>
+                        <div className="text-primary text-base transition-transform group-hover:translate-x-1 flex-shrink-0">
+                          <Zap className="h-4 w-4" fill="currentColor" />
+                        </div>
                       </button>
                     ))}
+                  </div>
+
+                  {/* More features */}
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      onClick={() => navigate('/app/hook-battle')}
+                      className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-purple-500/30 bg-purple-500/5 hover:bg-purple-500/10 transition-all text-left"
+                    >
+                      <Swords className="h-4 w-4 text-purple-400 flex-shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold text-purple-400">Hook Battle</div>
+                        <div className="text-[9px] text-muted-foreground">5 hooks, 1 winner</div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => navigate('/app/viral-dna')}
+                      className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-cyan-500/30 bg-cyan-500/5 hover:bg-cyan-500/10 transition-all text-left"
+                    >
+                      <Dna className="h-4 w-4 text-cyan-400 flex-shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold text-cyan-400">Viral DNA</div>
+                        <div className="text-[9px] text-muted-foreground">Decode viral videos</div>
+                      </div>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -372,15 +440,15 @@ export function Chat() {
                     <div className="mb-6 animate-fade-in">
                       <div className="max-w-3xl">
                         <div className="flex items-start gap-3">
-                          <div className="mt-1 relative">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                          <div className="mt-1 relative flex-shrink-0">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                               <div className="w-3 h-3 rounded-full bg-primary animate-pulse" />
                             </div>
-                            <div className="absolute inset-0 rounded-full bg-primary/30 blur-md animate-pulse" />
+                            <div className="absolute inset-0 rounded-full bg-primary/20 blur-md animate-pulse" />
                           </div>
                           <div className="flex-1 min-w-0 space-y-3">
                             {streamingContent ? (
-                              <div className="text-sm text-foreground/90 whitespace-pre-wrap typewriter">
+                              <div className="text-sm text-foreground/90 whitespace-pre-wrap break-words">
                                 {streamingContent}
                                 <span className="inline-block w-1 h-4 ml-1 bg-primary animate-pulse" />
                               </div>
@@ -405,15 +473,15 @@ export function Chat() {
 
                 {generationError && !isGenerating && (
                   <div className="mb-6 animate-fade-in">
-                    <div className="max-w-3xl glass-card p-6 border-destructive/20">
-                      <div className="space-y-4">
+                    <div className="max-w-3xl glass-card p-5 border-destructive/20">
+                      <div className="space-y-3">
                         <div className="flex items-start gap-3">
-                          <div className="mt-1 p-2 rounded-lg bg-destructive/10">
+                          <div className="mt-1 p-2 rounded-lg bg-destructive/10 flex-shrink-0">
                             <AlertCircle className="h-4 w-4 text-destructive" />
                           </div>
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-destructive mb-1">Generation Failed</h3>
-                            <p className="text-sm text-muted-foreground">{generationError}</p>
+                            <p className="text-sm text-muted-foreground break-words">{generationError}</p>
                           </div>
                         </div>
                         <Button onClick={handleRetry} variant="outline" size="sm" className="w-full border-primary/40 hover:bg-primary/10">
@@ -442,6 +510,12 @@ export function Chat() {
         open={showBuyCredits}
         onOpenChange={setShowBuyCredits}
         onSuccess={() => { loadUserCredits(); setShowBuyCredits(false); }}
+      />
+
+      <WelcomeModal
+        open={showWelcome}
+        onClose={() => setShowWelcome(false)}
+        username={user?.username}
       />
     </AppLayout>
   );

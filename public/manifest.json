@@ -1,0 +1,26 @@
+{
+  "name": "ViralForge AI",
+  "short_name": "ViralForge",
+  "description": "AI content engine for Gen Z creators — go viral in seconds",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1C1C1C",
+  "theme_color": "#FFE500",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/og-image.jpg",
+      "sizes": "1200x630",
+      "type": "image/jpeg"
+    }
+  ],
+  "categories": ["productivity", "social", "entertainment"]
+}

@@ -1,145 +1,130 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>ViralForge AI — Go Viral in Seconds ⚡</title>
-    <meta name="description" content="AI-powered viral content generator for TikTok, Reels, and Shorts. Get scroll-stopping hooks, scripts, captions, and hashtags instantly. Built for Gen Z creators." />
-    <meta name="keywords" content="tiktok ai, viral content generator, reels generator, shorts creator, gen z, content creation, viral hooks, ai content" />
-    <meta name="theme-color" content="#FFE500" />
 
-    <!-- PWA -->
-    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- PWA + App Meta -->
+    <title>ViralForge AI — Go Viral in Seconds ⚡</title>
+    <meta name="description" content="AI content engine for Gen Z creators. Generate scroll-stopping hooks, viral scripts, captions, and hashtags in seconds." />
+    <meta name="theme-color" content="#FFE500" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="ViralForge" />
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/favicon.svg" />
 
-    <!-- Splash screens -->
-    <meta name="msapplication-TileColor" content="#1C1C1E" />
-    <meta name="msapplication-TileImage" content="/og-image.jpg" />
-
-    <!-- Open Graph -->
+    <!-- Open Graph / Social -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://viralforge.onspace.ai" />
     <meta property="og:title" content="ViralForge AI — Go Viral in Seconds ⚡" />
-    <meta property="og:description" content="AI-powered viral content generator for TikTok, Reels, and Shorts. Built for Gen Z creators who want results, not theory." />
+    <meta property="og:description" content="AI content engine for Gen Z creators. Generate scroll-stopping hooks, viral scripts & captions in seconds." />
     <meta property="og:image" content="/og-image.jpg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:site_name" content="ViralForge AI" />
-
-    <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content="https://viralforge.onspace.ai" />
-    <meta name="twitter:title" content="ViralForge AI — Go Viral in Seconds ⚡" />
-    <meta name="twitter:description" content="AI-powered viral content generator for TikTok, Reels, and Shorts. Built for Gen Z creators who want results." />
+    <meta name="twitter:title" content="ViralForge AI ⚡" />
+    <meta name="twitter:description" content="Go viral in seconds with AI-powered hooks & scripts for TikTok, Reels & Shorts." />
     <meta name="twitter:image" content="/og-image.jpg" />
 
-    <!-- Schema.org -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebApplication",
-      "name": "ViralForge AI",
-      "url": "https://viralforge.onspace.ai",
-      "description": "AI-powered viral content generator for TikTok, Reels, and Shorts. Built for Gen Z creators.",
-      "applicationCategory": "CreativeWork",
-      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
-    }
-    </script>
+    <!-- Splash screens for iOS -->
+    <meta name="mobile-web-app-capable" content="yes" />
 
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
     <style>
-      /* Splash / loading screen */
+      /* Loading splash */
       #splash {
         position: fixed;
         inset: 0;
-        background: #1C1C1E;
+        background: #1C1C1C;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
+        gap: 24px;
         z-index: 9999;
-        transition: opacity 0.5s ease, transform 0.5s ease;
+        transition: opacity 0.4s ease;
       }
-      #splash.hidden {
-        opacity: 0;
-        pointer-events: none;
+      #splash.hidden { opacity: 0; pointer-events: none; }
+      .splash-logo {
+        width: 80px;
+        height: 80px;
+        background: #FFE500;
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 0 40px #FFE500aa;
+        animation: splash-pulse 1.5s ease-in-out infinite;
       }
-      #splash .bolt {
-        width: 64px;
-        height: 64px;
-        animation: splash-pulse 1s ease-in-out infinite alternate;
-      }
-      #splash .wordmark {
-        margin-top: 16px;
-        font-family: Inter, sans-serif;
+      .splash-logo svg { width: 48px; height: 48px; fill: #1C1C1C; }
+      .splash-title {
+        font-family: 'Inter', sans-serif;
         font-weight: 900;
         font-size: 28px;
-        letter-spacing: -0.04em;
         color: #FFE500;
+        letter-spacing: -0.04em;
       }
-      #splash .tagline {
-        margin-top: 6px;
-        font-family: Inter, sans-serif;
-        font-size: 13px;
-        color: rgba(255,255,255,0.4);
-        letter-spacing: 0.04em;
-      }
-      #splash .bar {
-        margin-top: 32px;
-        width: 120px;
-        height: 3px;
-        background: rgba(255,229,0,0.15);
-        border-radius: 99px;
+      .splash-bar-track {
+        width: 200px;
+        height: 4px;
+        background: #333;
+        border-radius: 2px;
         overflow: hidden;
       }
-      #splash .bar-fill {
+      .splash-bar {
         height: 100%;
-        background: #FFE500;
-        border-radius: 99px;
-        animation: bar-load 1.2s ease-out forwards;
+        background: linear-gradient(90deg, #FFE500, #FFB800);
+        border-radius: 2px;
+        animation: load-bar 1.2s ease-in-out forwards;
       }
       @keyframes splash-pulse {
-        from { filter: drop-shadow(0 0 10px #FFE500aa); transform: scale(0.95); }
-        to   { filter: drop-shadow(0 0 30px #FFE500ff); transform: scale(1.05); }
+        0%, 100% { box-shadow: 0 0 20px #FFE500aa; }
+        50% { box-shadow: 0 0 50px #FFE500cc, 0 0 80px #FFE50055; }
       }
-      @keyframes bar-load {
-        from { width: 0; }
-        to   { width: 100%; }
+      @keyframes load-bar {
+        0% { width: 0%; }
+        60% { width: 75%; }
+        100% { width: 100%; }
       }
     </style>
   </head>
   <body>
     <!-- Splash screen -->
     <div id="splash">
-      <svg class="bolt" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="32" height="32" rx="8" fill="#2A2A2A"/>
-        <polygon points="19,2 10,18 15,18 13,30 22,14 17,14" fill="#FFE500"/>
-      </svg>
-      <div class="wordmark">ViralForge AI</div>
-      <div class="tagline">GO VIRAL IN SECONDS ⚡</div>
-      <div class="bar"><div class="bar-fill"></div></div>
+      <div class="splash-logo">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/>
+        </svg>
+      </div>
+      <div class="splash-title">ViralForge AI</div>
+      <div class="splash-bar-track"><div class="splash-bar"></div></div>
     </div>
 
     <div id="root"></div>
+
+    <script>
+      // Hide splash once React mounts
+      window.__hideSplash = function() {
+        const s = document.getElementById('splash');
+        if (s) {
+          s.classList.add('hidden');
+          setTimeout(() => s.remove(), 450);
+        }
+      };
+    </script>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      // Hide splash when React is ready
-      window.addEventListener('load', function() {
-        setTimeout(function() {
-          var splash = document.getElementById('splash');
-          if (splash) {
-            splash.classList.add('hidden');
-            setTimeout(function() { splash.style.display = 'none'; }, 500);
-          }
-        }, 1400);
-      });
+      // Fallback: hide splash after 3s if React is slow
+      setTimeout(() => { if (window.__hideSplash) window.__hideSplash(); }, 3000);
     </script>
   </body>
 </html>

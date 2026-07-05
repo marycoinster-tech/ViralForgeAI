@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
@@ -72,6 +73,11 @@ function AppRoutes() {
 }
 
 function App() {
+  // Hide splash screen once React has mounted
+  useEffect(() => {
+    if (typeof window.__hideSplash === 'function') window.__hideSplash();
+  }, []);
+
   return (
     <BrowserRouter>
       <AuthProvider>
@@ -84,6 +90,12 @@ function App() {
       </AuthProvider>
     </BrowserRouter>
   );
+}
+
+declare global {
+  interface Window {
+    __hideSplash?: () => void;
+  }
 }
 
 export default App;
