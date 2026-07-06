@@ -8,10 +8,11 @@ import { GeneratorInput } from '@/types/content';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Sparkles, RotateCcw, X, AlertCircle } from 'lucide-react';
+import { RotateCcw, X, AlertCircle, Zap, Flame, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BuyCreditsModal } from '@/components/features/BuyCreditsModal';
-
+import { OnboardingModal } from '@/components/features/OnboardingModal';
+import viralforgerMascot from '@/assets/viralforger-mascot.png';
 
 interface Message {
   id: string;
@@ -19,6 +20,41 @@ interface Message {
   content: any;
   created_at: string;
 }
+
+const QUICK_PROMPTS = [
+  {
+    icon: <Flame className="h-4 w-4" />,
+    label: '🔥 Dark anime hook',
+    input: {
+      niche: 'anime' as const,
+      vibe: 'dark' as const,
+      goal: 'followers' as const,
+      platform: 'tiktok' as const,
+      customTopic: 'dark anime moments that hit different emotionally',
+    },
+  },
+  {
+    icon: <DollarSign className="h-4 w-4" />,
+    label: '💸 Make money online',
+    input: {
+      niche: 'money' as const,
+      vibe: 'motivational' as const,
+      goal: 'money' as const,
+      platform: 'tiktok' as const,
+      customTopic: 'how to make $5k/month online as a Gen Z in 2026',
+    },
+  },
+  {
+    icon: <Zap className="h-4 w-4" />,
+    label: '⚡ Toxic motivation',
+    input: {
+      niche: 'motivation' as const,
+      vibe: 'toxic' as const,
+      goal: 'engagement' as const,
+      platform: 'reels' as const,
+    },
+  },
+];
 
 export function Chat() {
   const { conversationId } = useParams();
@@ -36,14 +72,31 @@ export function Chat() {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [streamingContent, setStreamingContent] = useState<string>('');
   const [showBuyCredits, setShowBuyCredits] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
-  const [userCredits, setUserCredits] = useState(0);
-  // Daily thumbnail image limit tracking
   const [dailyImageCount, setDailyImageCount] = useState(0);
   const DAILY_IMAGE_LIMIT = 4;
 
   const generationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Check if this is a brand-new user (show onboarding once)
+  useEffect(() => {
+    if (!user?.id) return;
+    const key = `viralforge_onboarded_${user.id}`;
+    if (!localStorage.getItem(key)) {
+      // Short delay so the page renders first
+      const timer = setTimeout(() => setShowOnboarding(true), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [user?.id]);
+
+  const handleOnboardingClose = () => {
+    if (user?.id) {
+      localStorage.setItem(`viralforge_onboarded_${user.id}`, '1');
+    }
+    setShowOnboarding(false);
+  };
 
   useEffect(() => {
     setIsGenerating(false);
@@ -57,23 +110,8 @@ export function Chat() {
   }, [conversationId]);
 
   useEffect(() => {
-    loadUserCredits();
     loadDailyImageCount();
   }, []);
-
-  const loadUserCredits = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('credits_remaining')
-        .eq('id', user!.id)
-        .single();
-      if (error) throw error;
-      setUserCredits(data?.credits_remaining || 0);
-    } catch (error: any) {
-      console.error('Failed to load credits:', error);
-    }
-  };
 
   const loadDailyImageCount = () => {
     const today = new Date().toDateString();
@@ -132,7 +170,6 @@ export function Chat() {
 
     abortControllerRef.current = new AbortController();
 
-    // Check if this is a thumbnail generation request — only triggered by [THUMBNAIL REQUEST] prefix from InputBar
     const isThumbnailRequest = input.customTopic?.startsWith('[THUMBNAIL REQUEST]');
 
     if (isThumbnailRequest) {
@@ -176,7 +213,9 @@ export function Chat() {
       const tempUserMessage: Message = {
         id: `temp-${Date.now()}`,
         role: 'user',
-        content: input.customTopic || { niche: input.niche, vibe: input.vibe, goal: input.goal, platform: input.platform },
+        content:
+          input.customTopic ||
+          { niche: input.niche, vibe: input.vibe, goal: input.goal, platform: input.platform },
         created_at: new Date().toISOString(),
       };
       setMessages(prev => [...prev, tempUserMessage]);
@@ -189,7 +228,7 @@ export function Chat() {
         {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${session.access_token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -205,7 +244,7 @@ export function Chat() {
             remixIteration,
           }),
           signal: abortControllerRef.current.signal,
-        }
+        },
       );
 
       if (!response.ok) {
@@ -285,23 +324,24 @@ export function Chat() {
     };
   }, []);
 
-  const quickPrompts = [
-    {
-      label: 'Dark anime content',
-      input: { niche: 'anime' as const, vibe: 'dark' as const, goal: 'followers' as const, platform: 'tiktok' as const, customTopic: 'dark anime moments that hit different' },
-    },
-    {
-      label: 'Money-making tips',
-      input: { niche: 'money' as const, vibe: 'motivational' as const, goal: 'money' as const, platform: 'tiktok' as const, customTopic: 'how to make money with AI in 2026' },
-    },
-    {
-      label: 'Toxic motivation',
-      input: { niche: 'motivation' as const, vibe: 'toxic' as const, goal: 'engagement' as const, platform: 'reels' as const },
-    },
-  ];
-
   return (
     <AppLayout>
+      {/* Onboarding modal — shown once per new user */}
+      <OnboardingModal
+        open={showOnboarding}
+        onClose={handleOnboardingClose}
+        onQuickStart={(prompt) => {
+          handleOnboardingClose();
+          handleGenerate({
+            niche: 'motivation',
+            vibe: 'motivational',
+            goal: 'followers',
+            platform: 'tiktok',
+            customTopic: prompt,
+          });
+        }}
+      />
+
       <div className="h-full flex flex-col relative">
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-4xl mx-auto px-4 py-8">
@@ -310,33 +350,52 @@ export function Chat() {
                 <div className="h-8 w-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
               </div>
             ) : messages.length === 0 ? (
-              <div className="h-full flex items-center justify-center">
-                <div className="text-center space-y-4 max-w-md animate-fade-in">
-                  <div className="flex justify-center">
-                    <div className="relative">
-                      <Sparkles className="h-16 w-16 text-primary animate-pulse" />
-                      <div className="absolute inset-0 blur-2xl bg-primary/30 animate-glow-pulse" />
-                    </div>
-                  </div>
-                  <h2 className="text-3xl font-black">
-                    Ready to go <span className="text-gradient">viral</span>?
-                  </h2>
-                  <p className="text-muted-foreground">
-                    Tell me what kind of content you want to create, and I'll generate hooks, scripts, and captions that actually hit.
-                  </p>
-                  <div className="flex flex-wrap gap-2 justify-center pt-4">
-                    {quickPrompts.map((prompt) => (
-                      <button
-                        key={prompt.label}
-                        onClick={() => handleGenerate(prompt.input)}
-                        disabled={isGenerating}
-                        className="px-4 py-2 rounded-lg bg-muted/50 hover:bg-muted text-sm font-medium transition-colors disabled:opacity-50"
-                      >
-                        {prompt.label}
-                      </button>
-                    ))}
+              /* ── UPGRADED EMPTY STATE ── */
+              <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 animate-fade-in">
+                {/* Mascot with glow ring */}
+                <div className="relative mb-8">
+                  {/* Pulsing glow ring */}
+                  <div className="absolute -inset-6 rounded-full bg-primary/15 blur-2xl animate-glow-pulse" />
+                  <div className="absolute -inset-3 rounded-full border-2 border-primary/20 animate-ping" style={{ animationDuration: '3s' }} />
+                  <img
+                    src={viralforgerMascot}
+                    alt="ViralForger"
+                    className="relative h-28 w-28 sm:h-32 sm:w-32 object-contain animate-spark-float drop-shadow-2xl"
+                  />
+                  {/* Floating electric badge */}
+                  <div className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[9px] font-black px-1.5 py-0.5 rounded-full animate-bounce-in">
+                    ⚡ READY
                   </div>
                 </div>
+
+                <h2 className="text-3xl sm:text-4xl font-black mb-3">
+                  Ready to go <span className="text-gradient">viral</span>?
+                </h2>
+                <p className="text-muted-foreground text-sm sm:text-base max-w-sm mb-8 leading-relaxed">
+                  Tell me your topic, niche, or vibe — I'll generate scroll-stopping hooks, viral scripts, and captions in seconds.
+                </p>
+
+                {/* Quick-start pill cards */}
+                <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center w-full max-w-lg">
+                  {QUICK_PROMPTS.map((prompt) => (
+                    <button
+                      key={prompt.label}
+                      onClick={() => handleGenerate(prompt.input)}
+                      disabled={isGenerating}
+                      className="group flex items-center gap-2.5 px-4 py-3 rounded-2xl border border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/50 hover:shadow-md hover:shadow-primary/10 transition-all duration-200 text-sm font-bold disabled:opacity-50 flex-1 sm:flex-initial justify-center"
+                    >
+                      <span className="text-primary group-hover:scale-110 transition-transform">
+                        {prompt.icon}
+                      </span>
+                      {prompt.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Bottom hint */}
+                <p className="mt-6 text-xs text-muted-foreground/60">
+                  Or just type anything below ↓
+                </p>
               </div>
             ) : (
               <>
@@ -372,15 +431,15 @@ export function Chat() {
                     <div className="mb-6 animate-fade-in">
                       <div className="max-w-3xl">
                         <div className="flex items-start gap-3">
-                          <div className="mt-1 relative">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                          <div className="mt-1 relative flex-shrink-0">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                               <div className="w-3 h-3 rounded-full bg-primary animate-pulse" />
                             </div>
-                            <div className="absolute inset-0 rounded-full bg-primary/30 blur-md animate-pulse" />
+                            <div className="absolute inset-0 rounded-full bg-primary/20 blur-md animate-pulse" />
                           </div>
                           <div className="flex-1 min-w-0 space-y-3">
                             {streamingContent ? (
-                              <div className="text-sm text-foreground/90 whitespace-pre-wrap typewriter">
+                              <div className="text-sm text-foreground/90 whitespace-pre-wrap">
                                 {streamingContent}
                                 <span className="inline-block w-1 h-4 ml-1 bg-primary animate-pulse" />
                               </div>
@@ -395,7 +454,12 @@ export function Chat() {
                       </div>
                     </div>
                     <div className="flex justify-center">
-                      <Button variant="outline" size="sm" onClick={handleStopGeneration} className="border-destructive/40 hover:bg-destructive/10">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleStopGeneration}
+                        className="border-destructive/40 hover:bg-destructive/10"
+                      >
                         <X className="mr-2 h-4 w-4" />
                         Stop generating
                       </Button>
@@ -416,7 +480,12 @@ export function Chat() {
                             <p className="text-sm text-muted-foreground">{generationError}</p>
                           </div>
                         </div>
-                        <Button onClick={handleRetry} variant="outline" size="sm" className="w-full border-primary/40 hover:bg-primary/10">
+                        <Button
+                          onClick={handleRetry}
+                          variant="outline"
+                          size="sm"
+                          className="w-full border-primary/40 hover:bg-primary/10"
+                        >
                           <RotateCcw className="mr-2 h-4 w-4" />
                           Retry Generation
                         </Button>
@@ -441,7 +510,7 @@ export function Chat() {
       <BuyCreditsModal
         open={showBuyCredits}
         onOpenChange={setShowBuyCredits}
-        onSuccess={() => { loadUserCredits(); setShowBuyCredits(false); }}
+        onSuccess={() => { setShowBuyCredits(false); }}
       />
     </AppLayout>
   );
