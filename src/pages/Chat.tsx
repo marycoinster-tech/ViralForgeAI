@@ -418,6 +418,7 @@ export function Chat() {
                   return (
                     <AIMessage
                       key={message.id}
+                      messageId={message.id}
                       content={message.content}
                       onRemix={(iteration) => {
                         if (lastInput) handleGenerate(lastInput, false, iteration);

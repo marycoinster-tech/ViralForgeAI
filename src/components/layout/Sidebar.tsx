@@ -16,7 +16,6 @@ import {
   Trash2,
   ShoppingCart,
   Swords,
-  Dna,
   CalendarDays,
   Sun,
   Moon,
@@ -149,7 +148,6 @@ export function Sidebar({ onClose }: SidebarProps) {
       {/* Feature nav */}
       <div className="px-3 pt-3 pb-1 space-y-0.5">
         {navItem('/app/hook-battle', <Swords className="h-4 w-4" />, 'Hook Battle', 'HOT')}
-        {navItem('/app/viral-dna', <Dna className="h-4 w-4" />, 'Viral DNA', 'NEW')}
         {navItem('/app/calendar', <CalendarDays className="h-4 w-4" />, 'Content Calendar')}
       </div>
 
