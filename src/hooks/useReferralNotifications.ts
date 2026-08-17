@@ -53,9 +53,10 @@ export function useReferralNotifications() {
 
     checkInitial();
 
-    // Subscribe to live INSERT events — single channel per user
+    // Subscribe to live INSERT events — unique channel name prevents double-subscribe in StrictMode
+    const channelName = `referrals_notify_${user.id}_${Date.now()}`;
     const channel = supabase
-      .channel(`referrals_notify_${user.id}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
