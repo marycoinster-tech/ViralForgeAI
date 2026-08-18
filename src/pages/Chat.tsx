@@ -8,7 +8,7 @@ import { GeneratorInput } from '@/types/content';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { RotateCcw, X, AlertCircle, Zap, Flame, DollarSign } from 'lucide-react';
+import { RotateCcw, X, AlertCircle, Zap, Flame, DollarSign, Skull } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BuyCreditsModal } from '@/components/features/BuyCreditsModal';
 import { OnboardingModal } from '@/components/features/OnboardingModal';
@@ -52,6 +52,17 @@ const QUICK_PROMPTS = [
       vibe: 'toxic' as const,
       goal: 'engagement' as const,
       platform: 'reels' as const,
+    },
+  },
+  {
+    icon: <Skull className="h-4 w-4" />,
+    label: '😈 Roast my idea',
+    input: {
+      niche: 'motivation' as const,
+      vibe: 'dark' as const,
+      goal: 'engagement' as const,
+      platform: 'tiktok' as const,
+      customTopic: 'Roast me: I want to start a fitness TikTok but I only have 10 minutes a day to post. Give me a brutal honest opinion and fix my approach.',
     },
   },
 ];
