@@ -80,7 +80,7 @@ export function InputBar({
   };
 
   const getPlaceholder = () => {
-    if (roastMode) return 'Paste your script here and I\'ll roast it 💀 Be brutal? Yes.';
+    if (roastMode) return 'Say anything... just know the savage energy is permanently on 💀';
     if (thumbnailMode) return 'Describe your thumbnail concept — e.g. "dark neon athlete with fire background"';
     return 'Drop a topic, niche, vibe — or just tell me what\'s on your mind...';
   };
@@ -90,18 +90,19 @@ export function InputBar({
 
     if (roastMode) {
       if (!text) {
-        toast({ title: 'Paste your script first 💀', description: 'I need something to roast.', variant: 'destructive' });
+        toast({ title: 'Say something 💀', description: 'Type anything — just know the savage energy is ON.', variant: 'destructive' });
         return;
       }
+      // Send with a personality marker — NOT a hardcoded script prompt.
+      // The AI decides what to do based on what the user actually said.
       onGenerate({
         niche: selectedNiche,
         vibe: selectedVibe,
         goal: selectedGoal,
         platform: selectedPlatform,
-        customTopic: `Roast my script — be brutal, no mercy, highlight every weak line and tell me exactly why it sucks. Then offer to fix it:\n\n"${text}"`,
+        customTopic: `[ROAST PERSONALITY] ${text}`,
       });
       setCustomTopic('');
-      setRoastMode(false);
       return;
     }
 
@@ -246,7 +247,7 @@ export function InputBar({
 
   // ── Mode badge ───────────────────────────────────────────────────────────
   const modeBadge = roastMode
-    ? <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse">💀 ROAST MODE</span>
+    ? <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse">💀 SAVAGE MODE ON</span>
     : thumbnailMode
     ? <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-400 border border-violet-500/30">🖼️ THUMBNAIL — {imagesLeft}/{dailyImageLimit} left</span>
     : null;
