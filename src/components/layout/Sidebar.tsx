@@ -19,10 +19,12 @@ import {
   CalendarDays,
   Sun,
   Moon,
+  Flame,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { BuyCreditsModal } from '@/components/features/BuyCreditsModal';
 import { useReferralNotifications } from '@/hooks/useReferralNotifications';
+import { getStreak, updateStreak } from '@/lib/streak';
 import viralforgerMascot from '@/assets/viralforger-mascot.png';
 
 interface Conversation {
@@ -43,13 +45,32 @@ export function Sidebar({ onClose }: SidebarProps) {
   const { credits, refreshCredits } = useCredits();
   const { theme, setTheme } = useTheme();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [streak, setStreak] = useState(0);
+  const [streakActiveToday, setStreakActiveToday] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [showBuyCredits, setShowBuyCredits] = useState(false);
   const { newReferralCount, clearNotifications } = useReferralNotifications();
 
   useEffect(() => {
-    if (user) loadConversations();
+    if (user) {
+      loadConversations();
+      const s = getStreak(user.id);
+      setStreak(s.count);
+      setStreakActiveToday(s.isActiveToday);
+    }
+  }, [user]);
+
+  // Listen for streak updates triggered from Chat after generation
+  useEffect(() => {
+    const handler = () => {
+      if (!user) return;
+      const s = getStreak(user.id);
+      setStreak(s.count);
+      setStreakActiveToday(s.isActiveToday);
+    };
+    window.addEventListener('viralforge:streak-updated', handler);
+    return () => window.removeEventListener('viralforge:streak-updated', handler);
   }, [user]);
 
   const loadConversations = async () => {
@@ -208,12 +229,30 @@ export function Sidebar({ onClose }: SidebarProps) {
           </Button>
         </div>
 
-        {/* User row */}
+        {/* User row + streak badge */}
         <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg">
           <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center">
             <User className="h-3 w-3 text-primary" />
           </div>
           <span className="text-xs font-semibold truncate flex-1 text-muted-foreground">{user?.username}</span>
+          {/* Streak badge */}
+          {streak > 0 && (
+            <div
+              title={`${streak}-day streak${streak >= 3 ? ' 🔥 Keep it up!' : ''}`}
+              className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${
+                streak >= 3
+                  ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                  : 'bg-muted/50 text-muted-foreground border border-border/40'
+              } ${streakActiveToday ? '' : 'opacity-60'}`}
+            >
+              {streak >= 3 ? (
+                <Flame className={`h-2.5 w-2.5 ${streak >= 7 ? 'animate-pulse' : ''}`} />
+              ) : (
+                <span>⚡</span>
+              )}
+              <span>{streak}d</span>
+            </div>
+          )}
         </div>
 
         {/* Action row — settings, theme toggle, logout */}

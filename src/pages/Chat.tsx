@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { RotateCcw, X, AlertCircle, Zap, Flame, DollarSign, Skull } from 'lucide-react';
+import { updateStreak } from '@/lib/streak';
 import { Button } from '@/components/ui/button';
 import { BuyCreditsModal } from '@/components/features/BuyCreditsModal';
 import { OnboardingModal } from '@/components/features/OnboardingModal';
@@ -286,6 +287,11 @@ export function Chat() {
               if (isThumbnailRequest) incrementDailyImageCount();
               await loadConversation(convId!);
               setStreamingContent('');
+              // Update posting streak + notify Sidebar
+              if (user?.id) {
+                updateStreak(user.id);
+                window.dispatchEvent(new Event('viralforge:streak-updated'));
+              }
               continue;
             }
             try {

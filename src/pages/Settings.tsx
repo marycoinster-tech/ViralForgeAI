@@ -24,6 +24,8 @@ import {
   Share2,
   Twitter,
   ExternalLink,
+  Skull,
+  Flame,
 } from 'lucide-react';
 import { useReferralNotifications } from '@/hooks/useReferralNotifications';
 import {
@@ -62,15 +64,28 @@ export function Settings() {
   const [copiedRef, setCopiedRef] = useState(false);
   const { clearNotifications } = useReferralNotifications();
 
+  // Saved bangers from localStorage
+  const [bangers, setBangers] = useState<Array<{ id: string; content: string; savedAt: string }>>([]);
+
   useEffect(() => {
     if (user) {
       loadCredits();
       loadTransactions();
       loadReferralStats();
-      // Clear sidebar notification badge when user opens settings
       clearNotifications();
+      // Load saved bangers from localStorage
+      const stored = JSON.parse(localStorage.getItem('vf_bangers_list') || '[]');
+      setBangers(stored);
     }
   }, [user]);
+
+  const handleRemoveBanger = (id: string) => {
+    localStorage.removeItem(`vf_banger_${id}`);
+    const updated = bangers.filter(b => b.id !== id);
+    localStorage.setItem('vf_bangers_list', JSON.stringify(updated));
+    setBangers(updated);
+    toast({ title: 'Removed from bangers.' });
+  };
 
   const loadCredits = async () => {
     try {
@@ -475,6 +490,61 @@ export function Settings() {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* ─── SAVED BANGERS SECTION ─── */}
+        <div className="glass-card p-6 space-y-4">
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <Skull className="h-5 w-5 text-red-400" />
+            Saved Bangers 💀
+          </h2>
+
+          {bangers.length === 0 ? (
+            <div className="py-8 text-center space-y-3">
+              <Skull className="h-10 w-10 mx-auto text-muted-foreground/20" />
+              <p className="text-sm text-muted-foreground">
+                No bangers saved yet. Tap 💀 on any savage AI reply to save it here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                {bangers.length} banger{bangers.length !== 1 ? 's' : ''} saved — your all-time favourite AI lines.
+              </p>
+              {bangers.map((banger) => (
+                <div
+                  key={banger.id}
+                  className="relative group p-4 rounded-xl bg-red-500/5 border border-red-500/20 hover:border-red-500/40 transition-colors"
+                >
+                  <div className="flex items-start gap-2">
+                    <Flame className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-foreground leading-relaxed line-clamp-3">{banger.content}</p>
+                      <p className="text-[10px] text-muted-foreground mt-1.5">
+                        {new Date(banger.savedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(banger.content); toast({ title: '📋 Copied!' }); }}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all opacity-0 group-hover:opacity-100"
+                        title="Copy"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleRemoveBanger(banger.id)}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
+                        title="Remove"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Appearance Section */}

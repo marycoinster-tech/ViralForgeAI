@@ -7,7 +7,7 @@ import {
   Twitter, Instagram, ThumbsUp, ThumbsDown,
   Table2, Download, ChevronDown, ChevronUp,
   BarChart3, AlertTriangle, Loader2, Shield,
-  TrendingDown, Zap, X,
+  TrendingDown, Zap, X, Skull,
 } from 'lucide-react';
 import { ContentReviewPanel } from '@/components/features/ContentReviewPanel';
 import { supabase } from '@/lib/supabase';
@@ -372,9 +372,14 @@ export function AIMessage({ content, onRemix, remixIteration = 0, messageId }: A
   const [showRetention, setShowRetention] = useState(false);
 
   const reactionKey = messageId ? `vf_reaction_${messageId}` : null;
+  const bangerKey = messageId ? `vf_banger_${messageId}` : null;
   const [reaction, setReaction] = useState<'up' | 'down' | null>(() => {
     if (!reactionKey) return null;
     return (localStorage.getItem(reactionKey) as 'up' | 'down' | null);
+  });
+  const [isBanger, setIsBanger] = useState<boolean>(() => {
+    if (!bangerKey) return false;
+    return localStorage.getItem(bangerKey) === '1';
   });
 
   const isStructuredContent =
@@ -424,6 +429,36 @@ export function AIMessage({ content, onRemix, remixIteration = 0, messageId }: A
     }
     if (next === 'up') toast({ title: '🔥 Marked as great!', description: 'Glad this one hit!' });
     if (next === 'down') toast({ title: '👎 Got it', description: "We'll learn from this." });
+  };
+
+  const handleSaveBanger = () => {
+    if (!messageId) return;
+    const isNowBanger = !isBanger;
+    setIsBanger(isNowBanger);
+    if (bangerKey) {
+      if (isNowBanger) localStorage.setItem(bangerKey, '1');
+      else localStorage.removeItem(bangerKey);
+    }
+    // Save banger data to a master list for Settings page
+    const bangerListKey = 'vf_bangers_list';
+    const existing: Array<{ id: string; content: string; savedAt: string }> = JSON.parse(
+      localStorage.getItem(bangerListKey) || '[]'
+    );
+    if (isNowBanger) {
+      const snippet = typeof content === 'string'
+        ? content.substring(0, 200)
+        : content?.hook || content?.script || JSON.stringify(content).substring(0, 200);
+      const already = existing.find(b => b.id === messageId);
+      if (!already) {
+        existing.unshift({ id: messageId, content: snippet, savedAt: new Date().toISOString() });
+        localStorage.setItem(bangerListKey, JSON.stringify(existing.slice(0, 50)));
+      }
+      toast({ title: '💀 Bro really said that 😭', description: 'Saved to your Bangers in Settings.' });
+    } else {
+      const filtered = existing.filter(b => b.id !== messageId);
+      localStorage.setItem(bangerListKey, JSON.stringify(filtered));
+      toast({ title: 'Removed from bangers.' });
+    }
   };
 
   const handleExportStoryboardPDF = async () => {
@@ -660,7 +695,7 @@ export function AIMessage({ content, onRemix, remixIteration = 0, messageId }: A
             )}
 
             {/* Reactions */}
-            <div className="flex items-center gap-3 pt-1">
+            <div className="flex items-center gap-2 pt-1 flex-wrap">
               <span className="text-xs text-muted-foreground">Was this useful?</span>
               <button onClick={() => handleReaction('up')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${reaction === 'up' ? 'bg-green-500/20 text-green-400 border-green-500/40 scale-105' : 'bg-transparent border-border/50 text-muted-foreground hover:border-green-500/40 hover:text-green-400 hover:bg-green-500/10'}`}>
@@ -669,6 +704,19 @@ export function AIMessage({ content, onRemix, remixIteration = 0, messageId }: A
               <button onClick={() => handleReaction('down')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${reaction === 'down' ? 'bg-red-500/20 text-red-400 border-red-500/40 scale-105' : 'bg-transparent border-border/50 text-muted-foreground hover:border-red-500/40 hover:text-red-400 hover:bg-red-500/10'}`}>
                 <ThumbsDown className="h-3.5 w-3.5" />No
+              </button>
+              {/* 💀 Savage Banger button */}
+              <button
+                onClick={handleSaveBanger}
+                title={isBanger ? 'Remove from bangers' : 'Save as banger 💀'}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black transition-all border ml-auto ${
+                  isBanger
+                    ? 'bg-red-500/20 text-red-400 border-red-500/40 scale-105 shadow-sm shadow-red-500/10'
+                    : 'bg-transparent border-border/50 text-muted-foreground hover:border-red-500/40 hover:text-red-400 hover:bg-red-500/10'
+                }`}
+              >
+                <Skull className="h-3.5 w-3.5" />
+                {isBanger ? 'Banger 💀' : 'Banger?'}
               </button>
             </div>
           </div>
@@ -788,12 +836,22 @@ export function AIMessage({ content, onRemix, remixIteration = 0, messageId }: A
                   <span className="text-xs">Storyboard PDF</span>
                 </Button>
               )}
-              <div className="flex items-center gap-1.5 ml-auto">
+              <div className="flex items-center gap-1 ml-auto">
                 <button onClick={() => handleReaction('up')} className={`p-1.5 rounded-lg transition-all ${reaction === 'up' ? 'text-green-400 bg-green-500/10' : 'text-muted-foreground hover:text-green-400'}`}>
                   <ThumbsUp className="h-3.5 w-3.5" />
                 </button>
                 <button onClick={() => handleReaction('down')} className={`p-1.5 rounded-lg transition-all ${reaction === 'down' ? 'text-red-400 bg-red-500/10' : 'text-muted-foreground hover:text-red-400'}`}>
                   <ThumbsDown className="h-3.5 w-3.5" />
+                </button>
+                {/* 💀 Banger in conversational view */}
+                <button
+                  onClick={handleSaveBanger}
+                  title={isBanger ? 'Remove from bangers' : 'Save as banger 💀'}
+                  className={`p-1.5 rounded-lg transition-all ${
+                    isBanger ? 'text-red-400 bg-red-500/10' : 'text-muted-foreground hover:text-red-400'
+                  }`}
+                >
+                  <Skull className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>
