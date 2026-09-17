@@ -567,6 +567,104 @@ Respond ONLY with this exact JSON (no markdown):
       });
     }
 
+    // ─── RETENTION PREDICTION ────────────────────────────────────────────────
+    if (action === 'retention_prediction') {
+      const { script, hook, platform } = body;
+      const fullScript = `HOOK: ${hook || ''}
+
+SCRIPT: ${script || ''}`;
+
+      const prompt = `You are a brutally honest viral hook consultant and short-form video retention expert. You have analyzed tens of thousands of TikTok, Instagram Reels, and YouTube Shorts videos.
+
+Analyze this ${platform || 'TikTok'} script for retention risk:
+
+---
+${fullScript}
+---
+
+Your job: Identify EXACTLY where viewers will swipe away, and WHY — using real platform retention psychology.
+
+Be surgical. Quote exact lines. Be specific about the second/word where drop-off will spike.
+
+Retention killers you should look for:
+1. **Pacing drops** — too many slow words in a row, no energy spike
+2. **Expectation gap** — hook promised something the script delays delivering
+3. **Assumption points** — assumes viewer already knows/cares about the topic
+4. **Energy flat-lines** — monotone sentence structure for 3+ lines
+5. **Late payoff** — the "good part" comes too late
+6. **Overlong setups** — explaining context nobody asked for
+7. **Weak loop points** — no loop-worthy moment to bring them back
+8. **Corporate language** — anything that sounds like a press release
+
+For each danger zone, provide:
+- The EXACT sentence or phrase that will cause scroll-offs
+- At what second/position in the script (estimate)
+- The psychological reason why viewers leave here
+- A concrete 1-line fix that spikes retention at that exact moment
+
+Also give an OVERALL retention score and the single most impactful change.
+
+Respond ONLY with this exact JSON (no markdown):
+{
+  "overallRetentionScore": 67,
+  "verdict": "STRONG|GOOD|AVERAGE|WEAK|CRITICAL",
+  "verdictNote": "One brutal honest sentence about this script's retention potential",
+  "estimatedDropOffPoint": "Exact second where most viewers will leave (e.g. \"~8 seconds\")",
+  "dangerZones": [
+    {
+      "severity": "HIGH|MEDIUM|LOW",
+      "quotedPhrase": "exact phrase from script",
+      "estimatedSecond": 7,
+      "retentionKillerType": "Pacing drop|Expectation gap|Energy flat-line|Late payoff|Overlong setup|Corporate language|Assumption point|Weak loop",
+      "reason": "Specific psychological reason why viewers scroll here",
+      "fix": "Replacement line that spikes retention at this exact moment"
+    }
+  ],
+  "loopWorthinessScore": 45,
+  "loopSuggestion": "How to add a loop-worthy ending that brings viewers back to the beginning",
+  "hookStrength": {
+    "score": 72,
+    "verdict": "Whether the hook delivers on its promise",
+    "improvement": "One-line hook improvement suggestion"
+  },
+  "topFix": "The single most impactful change that would dramatically improve retention (be specific)",
+  "retentionSpikes": [
+    "Lines/moments in the script that ARE working well for retention"
+  ]
+}`;
+
+      const aiRes = await fetch(`${ONSPACE_AI_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${ONSPACE_AI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-3-flash-preview',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.7,
+          max_tokens: 2000,
+        }),
+      });
+
+      if (!aiRes.ok) throw new Error(`AI error: ${await aiRes.text()}`);
+
+      const aiData = await aiRes.json();
+      const raw = aiData.choices?.[0]?.message?.content ?? '';
+
+      let parsed: any;
+      try {
+        const clean = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+        parsed = JSON.parse(clean);
+      } catch {
+        throw new Error('Failed to parse retention prediction response');
+      }
+
+      return new Response(JSON.stringify(parsed), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response(JSON.stringify({ error: 'Unknown action' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
